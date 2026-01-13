@@ -2,14 +2,7 @@
 <html lang="zh-CN">
 
 <head>
-    <script>
-        (function () {
-            var t = localStorage.getItem('tidyflux-theme');
-            if (t && t !== 'default') document.documentElement.setAttribute('data-theme', t);
-            var c = localStorage.getItem('tidyflux-color-scheme');
-            if (c && c !== 'auto') document.documentElement.setAttribute('data-color-scheme', c);
-        })();
-    </script>
+    <script src="/js/theme-init.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <title data-i18n="title">Tidyflux</title>
@@ -23,8 +16,8 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="preload" href="/style.css" as="style">
 
-    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&display=swap" as="style"
-        onload="this.onload=null;this.rel='stylesheet'">
+    <!-- Fonts loaded via standard stylesheet link to avoid CSP issues with inline handlers -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&display=swap">
     <noscript>
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&display=swap">
     </noscript>

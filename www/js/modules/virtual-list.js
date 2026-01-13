@@ -119,6 +119,19 @@ export class VirtualList {
             }
         });
 
+        // 事件委托：处理点击事件
+        this.container.addEventListener('click', (e) => {
+            const itemEl = e.target.closest('.article-item');
+            if (itemEl && this.onItemClick) {
+                const id = itemEl.dataset.id;
+                // 查找对应的数据 item
+                const item = this.items.find(i => i.id == id);
+                if (item) {
+                    this.onItemClick(item);
+                }
+            }
+        });
+
         this.containerHeight = this.container.clientHeight;
     }
 
@@ -233,6 +246,9 @@ export class VirtualList {
             }
         }
 
+        // 预计算是否有图片
+        this._precalculateHasImage(items);
+
         this.calculatePositions();
         this.containerHeight = this.container.clientHeight;
         this.scrollTop = this.container.scrollTop;
@@ -250,6 +266,7 @@ export class VirtualList {
 
     appendItems(newItems) {
         this.items = [...this.items, ...newItems];
+        this._precalculateHasImage(newItems);
         this.calculatePositions();
         this.render();
     }
@@ -280,6 +297,7 @@ export class VirtualList {
         }
 
         // 重新计算位置
+        this._precalculateHasImage(newItems);
         this.calculatePositions();
 
         // 重置缓存以强制重新渲染
@@ -503,18 +521,16 @@ export class VirtualList {
         }
 
         if (!item.is_read) el.classList.add('unread');
-        if (item.thumbnail_url || this.hasImage(item)) el.classList.add('has-image');
+
+        // 使用预计算的标志，如果没有则回退到实时计算 (兼容性)
+        if (item._has_image !== undefined ? item._has_image : this.hasImage(item)) {
+            el.classList.add('has-image');
+        }
 
         const activeId = this.getActiveId ? this.getActiveId() : null;
         if (activeId && item.id == activeId) el.classList.add('active');
 
         el.innerHTML = this.renderItem(item);
-
-        el.addEventListener('click', () => {
-            if (this.onItemClick) {
-                this.onItemClick(item);
-            }
-        });
 
         // 观察该元素尺寸变化
         if (this.itemResizeObserver) {
@@ -539,6 +555,14 @@ export class VirtualList {
 
     hasImage(item) {
         return item.thumbnail_url || (item.content && /<img/i.test(item.content));
+    }
+
+    _precalculateHasImage(items) {
+        for (const item of items) {
+            if (item._has_image === undefined) {
+                item._has_image = !!(item.thumbnail_url || (item.content && /<img/i.test(item.content)));
+            }
+        }
     }
 
     updateItem(id, updates) {

@@ -1,9 +1,27 @@
 export default {
     title: 'Tidyflux',
-    loading: 'Loading...',
-    searching: 'Searching...',
-    search_failed: 'Search failed',
     welcome: 'Select an article to start reading',
+    common: {
+        confirm: 'Confirm',
+        cancel: 'Cancel',
+        ok: 'OK',
+        save: 'Save',
+        close: 'Close',
+        loading: 'Loading...',
+        searching: 'Searching...',
+        search_failed: 'Search failed',
+        ai_not_configured: 'AI service not configured, please configure in settings',
+        error: 'Error',
+        success: 'Success',
+        load_error: 'Load failed',
+        refreshing: 'Waiting for Miniflux refresh...',
+        refresh_failed: 'Refresh failed',
+        search: 'Search',
+        menu: 'Menu',
+        unnamed: 'Unnamed',
+        global_settings: 'Global Settings',
+        view: 'View'
+    },
     nav: {
         all: 'All Articles',
         unread: 'Unread',
@@ -23,8 +41,6 @@ export default {
         language: 'Language',
         enable: 'Enable',
         theme: 'Theme',
-        save: 'Save',
-        close: 'Close',
         server_url: 'Server URL',
         username: 'Username',
         password: 'Password',
@@ -42,7 +58,7 @@ export default {
         export_opml: 'Export OPML',
         importing: 'Importing...',
         exporting: 'Exporting...',
-        import_success_refresh: 'Import submitted, refreshing feeds in background.\nPage will reload in 2 seconds.',
+        import_success_refresh: 'Import submitted, refreshing feeds in background.\nPage will reload soon.',
         account_security: 'Account Security',
         new_password: 'New Password',
         confirm_password: 'Confirm Password',
@@ -76,8 +92,8 @@ export default {
         frequency: 'Frequency',
         once_daily: 'Once Daily',
         twice_daily: 'Twice Daily',
-        once_daily_desc: 'Summarize unread articles from the past 24 hours (capped at 500 latest, extracting ~1000 tokens per article). Warning: High volume of articles will consume significant tokens.',
-        twice_daily_desc: 'Runs every 12 hours, summarizing recent unread articles (capped at 500 latest, extracting ~1000 tokens per article). Warning: High volume of articles will consume significant tokens.',
+        once_daily_desc: 'Summarize unread articles from the past day. Warning: High volume of articles will consume significant tokens.',
+        twice_daily_desc: 'Summarize recent unread articles twice a day. Warning: High volume of articles will consume significant tokens.',
         second_run_at: 'Second run at',
         manage_all_schedules: 'Manage Other Digests',
         other_schedules: 'Other Scheduled Tasks',
@@ -122,22 +138,6 @@ export default {
         thumbnails_on: 'Thumbnails enabled',
         thumbnails_off: 'Thumbnails disabled'
     },
-    common: {
-        confirm: 'Confirm',
-        cancel: 'Cancel',
-        ok: 'OK',
-        go_to_settings: 'Go to Settings',
-        error: 'Error',
-        success: 'Success',
-        load_error: 'Load failed',
-        refreshing: 'Waiting for Miniflux refresh...',
-        refresh_failed: 'Refresh failed',
-        search: 'Search',
-        menu: 'Menu',
-        unnamed: 'Unnamed',
-        close: 'Close',
-        global_settings: 'Global Settings'
-    },
     auth: {
         title: 'Tidyflux',
         subtitle: 'Please login',
@@ -155,10 +155,7 @@ export default {
         connection_test_failed: 'Connection test failed'
     },
     app: {
-        description: 'Simple and elegant RSS reader',
-        loading: 'Loading...',
-        searching: 'Searching...',
-        search_failed: 'Search failed'
+        description: 'Simple and elegant RSS reader'
     },
     dialogs: {
         add_feed_title: 'Add RSS Feed',
@@ -178,7 +175,6 @@ export default {
         feed_title: 'Title',
         site_url: 'Site URL',
         feed_url: 'Feed URL',
-
         update: 'Update'
     },
     feed: {
@@ -203,14 +199,15 @@ export default {
         import_failed: 'Import failed',
         read_file_failed: 'Failed to read file',
         export_failed: 'Export failed',
-        fetch_preferences_failed: 'Failed to fetch preferences',
-        search_failed: 'Search failed'
+        fetch_preferences_failed: 'Failed to fetch preferences'
     },
     ai: {
         settings_title: 'AI Settings',
         api_url: 'API URL',
         api_key: 'API Key',
         model: 'Model Name',
+        temperature: 'Temperature',
+        concurrency: 'Concurrency',
         target_lang: 'Target Language',
         translate_prompt: 'Custom Translation Prompt',
         translate_prompt_placeholder: 'Leave empty for default',
@@ -223,7 +220,6 @@ export default {
         scope: "Scope",
         digest_time: "Time",
         save_success: 'AI configuration saved',
-        not_configured: 'AI service not configured, please configure in settings',
         api_error: 'API call failed',
         translating: 'Translating...',
         summarizing: 'Summarizing...',
@@ -245,8 +241,9 @@ export default {
     },
     digest: {
         title: 'Digests',
-        generating: 'Generating digest...',
+        generating: 'Generating, please check back later',
         generated: 'Digest generated',
+        success: 'Digest generated successfully, click to view',
         generate: 'Generate Digest',
         generate_for_feed: 'Generate digest for this feed',
         generate_for_group: 'Generate digest for this group',
@@ -257,10 +254,10 @@ export default {
         hours: 'hours',
         generated_at: 'Generated at',
         regenerate: 'Regenerate',
-        close: 'Close',
         error: 'Failed to generate digest',
-        ai_not_configured: 'AI service not configured, please configure in settings',
         unread_toast: 'You have {count} unread digests, click to view',
-        no_digests: 'No digests found'
+        no_digests: 'No digests found',
+        fetch_digests_failed: 'Failed to fetch digests',
+        fetch_digest_failed: 'Failed to fetch digest'
     }
 };

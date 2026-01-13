@@ -6,6 +6,10 @@
 
 import { DOMElements } from '../dom.js';
 
+const GESTURE_EDGE_THRESHOLD = 30;
+const GESTURE_MIN_SWIPE_DISTANCE = 80;
+const GESTURE_MAX_VERTICAL_DEVIATION = 100;
+const CLASS_ARTICLE_VIEW_ACTIVE = 'article-view-active';
 
 // 下拉刷新
 export function setupPullToRefresh() {
@@ -29,8 +33,8 @@ export function setupSwipeGesture() {
         const deltaY = Math.abs(touchEndY - touchStartY);
 
         // 从左边缘向右滑动返回
-        if (touchStartX < 30 && deltaX > 80 && deltaY < 100) {
-            if (DOMElements.body.classList.contains('article-view-active')) {
+        if (touchStartX < GESTURE_EDGE_THRESHOLD && deltaX > GESTURE_MIN_SWIPE_DISTANCE && deltaY < GESTURE_MAX_VERTICAL_DEVIATION) {
+            if (DOMElements.body.classList.contains(CLASS_ARTICLE_VIEW_ACTIVE)) {
                 history.back();
             }
         }

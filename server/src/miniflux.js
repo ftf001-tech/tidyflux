@@ -2,22 +2,41 @@ import fetch from 'node-fetch';
 import http from 'http';
 import https from 'https';
 
-//禁用 Keep-Alive 以避免 Premature close 错误
+// --- 常量定义 ---
+const DEFAULT_TIMEOUT = 30000;
+const RETRY_DELAY_BASE = 500;
+const MAX_RETRIES = 3;
+
+// 禁用 Keep-Alive 以避免某些代理服务器下的 Premature close 错误
 const httpAgent = new http.Agent({ keepAlive: false });
 const httpsAgent = new https.Agent({ keepAlive: false });
 
+/**
+ * Miniflux API 客户端
+ */
 export class MinifluxClient {
-    constructor(baseUrl, username, password, apiKey = null) {
+    /**
+     * @param {string} baseUrl - Miniflux API 根地址
+     * @param {string} username - 用户名 (Basic Auth)
+     * @param {string} password - 密码 (Basic Auth)
+     * @param {string} apiKey - API Token (优先使用)
+     * @param {Object} options - 自定义选项
+     */
+    constructor(baseUrl, username, password, apiKey = null, options = {}) {
         this.baseUrl = baseUrl.replace(/\/$/, '');
         this.username = username;
         this.password = password;
         this.apiKey = apiKey;
-        this.token = null; // Basic Auth string
+        this.token = null;
 
-        // 选择 agent
-        this.agent = this.baseUrl.startsWith('https') ? httpsAgent : httpAgent;
+        // 允许注入自定义 agent 或使用默认禁用 keep-alive 的 agent
+        this.httpAgent = options.httpAgent || httpAgent;
+        this.httpsAgent = options.httpsAgent || httpsAgent;
     }
 
+    /**
+     * 获取认证头
+     */
     getAuthHeader() {
         if (this.apiKey) {
             return {
@@ -35,10 +54,15 @@ export class MinifluxClient {
         };
     }
 
-    async request(endpoint, options = {}, retries = 3) {
-        const urlStr = `${this.baseUrl}/v1${endpoint}`;
-        const url = new URL(urlStr);
-        const requestModule = url.protocol === 'https:' ? https : http;
+    /**
+     * 执行 API 请求
+     * @param {string} endpoint - 接口路径 (e.g. /me)
+     * @param {Object} options - 请求选项
+     * @param {number} retries - 重试次数
+     */
+    async request(endpoint, options = {}, retries = MAX_RETRIES) {
+        const url = `${this.baseUrl}/v1${endpoint}`;
+        const agent = url.startsWith('https') ? this.httpsAgent : this.httpAgent;
 
         const requestOptions = {
             method: options.method || 'GET',
@@ -46,103 +70,69 @@ export class MinifluxClient {
                 ...this.getAuthHeader(),
                 ...options.headers
             },
-            agent: this.agent, // 必须使用禁用 Keep-Alive 的 agent
-            timeout: 30000
-        };
-
-        const postData = options.body;
-        if (postData) {
-            requestOptions.headers['Content-Length'] = Buffer.byteLength(postData);
-        }
-
-        const makeRequest = () => {
-            return new Promise((resolve, reject) => {
-                const req = requestModule.request(url, requestOptions, (res) => {
-                    const chunks = [];
-                    res.on('data', (chunk) => chunks.push(chunk));
-                    res.on('end', () => {
-                        const body = Buffer.concat(chunks).toString();
-
-                        if (res.statusCode === 204) {
-                            return resolve(null);
-                        }
-
-                        if (res.statusCode >= 200 && res.statusCode < 300) {
-                            try {
-                                resolve(JSON.parse(body));
-                            } catch (e) {
-                                // 万一返回的不是 JSON (虽然应该都是)
-                                resolve(body);
-                            }
-                        } else {
-                            reject(new Error(`Miniflux API Error: ${res.statusCode} ${res.statusMessage} - ${body}`));
-                        }
-                    });
-                });
-
-                req.on('error', (err) => {
-                    reject(err);
-                });
-
-                req.on('timeout', () => {
-                    req.destroy();
-                    reject(new Error(`Request timeout: ${urlStr}`));
-                });
-
-                if (postData) {
-                    req.write(postData);
-                }
-                req.end();
-            });
+            body: options.body,
+            agent,
+            timeout: options.timeout || DEFAULT_TIMEOUT
         };
 
         let lastError;
         for (let attempt = 0; attempt <= retries; attempt++) {
             try {
-                return await makeRequest();
+                const response = await fetch(url, requestOptions);
+
+                // 处理 204 No Content
+                if (response.status === 204) {
+                    return null;
+                }
+
+                const body = await response.text();
+
+                if (response.ok) {
+                    try {
+                        return JSON.parse(body);
+                    } catch (e) {
+                        // 如果不是标准 JSON 但响应码 OK，通常不应发生，但为了兼容性返回原文本
+                        return body;
+                    }
+                }
+
+                // 处理非 OK 响应
+                const error = new Error(`Miniflux API Error: ${response.status} ${response.statusText} - ${body}`);
+                error.status = response.status;
+                throw error;
+
             } catch (error) {
                 lastError = error;
 
-                // 如果是认证错误 (401, 403)，不要重试
-                if (error.message.includes('401') || error.message.includes('403')) {
+                // 认证错误不重试
+                if (error.status === 401 || error.status === 403) {
                     throw error;
                 }
 
+                // 达到最大重试次数
                 if (attempt === retries) {
                     console.error(`Miniflux request failed after ${retries + 1} attempts: ${endpoint}`, error.message);
-                    throw lastError;
+                    throw error;
                 }
-                const delay = 500 * (attempt + 1);
+
+                // 指数退避重试
+                const delay = RETRY_DELAY_BASE * (attempt + 1);
                 console.warn(`Miniflux request failed, retrying in ${delay}ms: ${endpoint} - ${error.message}`);
                 await new Promise(resolve => setTimeout(resolve, delay));
             }
         }
     }
 
-    // Auth verification (by fetching current user)
-    async me() {
-        return this.request('/me');
-    }
+    // --- Feeds ---
 
-    // Feeds
-    async getFeeds() {
-        return this.request('/feeds');
-    }
-
-    async getFeed(feedId) {
-        return this.request(`/feeds/${feedId}`);
-    }
-
-    // Get read/unread counters for all feeds
-    async getCounters() {
-        return this.request('/feeds/counters');
-    }
+    async me() { return this.request('/me'); }
+    async getFeeds() { return this.request('/feeds'); }
+    async getFeed(feedId) { return this.request(`/feeds/${feedId}`); }
+    async getCounters() { return this.request('/feeds/counters'); }
 
     async createFeed(url, categoryId) {
         const body = { feed_url: url };
-        if (categoryId) {
-            body.category_id = categoryId;
-        }
+        if (categoryId) body.category_id = parseInt(categoryId);
         return this.request('/feeds', {
             method: 'POST',
             body: JSON.stringify(body)
@@ -157,24 +147,19 @@ export class MinifluxClient {
     }
 
     async deleteFeed(feedId) {
-        return this.request(`/feeds/${feedId}`, {
-            method: 'DELETE'
-        });
+        return this.request(`/feeds/${feedId}`, { method: 'DELETE' });
     }
 
     async refreshFeed(feedId) {
-        return this.request(`/feeds/${feedId}/refresh`, {
-            method: 'PUT'
-        });
+        return this.request(`/feeds/${feedId}/refresh`, { method: 'PUT' });
     }
 
     async refreshAllFeeds() {
-        return this.request('/feeds/refresh', {
-            method: 'PUT'
-        });
+        return this.request('/feeds/refresh', { method: 'PUT' });
     }
 
-    // Entries (Articles)
+    // --- Entries ---
+
     async getEntries(params = {}) {
         const query = new URLSearchParams();
         for (const [key, value] of Object.entries(params)) {
@@ -185,9 +170,7 @@ export class MinifluxClient {
         return this.request(`/entries?${query.toString()}`);
     }
 
-    async getEntry(entryId) {
-        return this.request(`/entries/${entryId}`);
-    }
+    async getEntry(entryId) { return this.request(`/entries/${entryId}`); }
 
     async updateEntry(entryId, data) {
         return this.request(`/entries/${entryId}`, {
@@ -196,7 +179,6 @@ export class MinifluxClient {
         });
     }
 
-    // Update entry status (read/unread) - uses batch endpoint as required by Miniflux API
     async updateEntriesStatus(entryIds, status) {
         return this.request('/entries', {
             method: 'PUT',
@@ -208,22 +190,16 @@ export class MinifluxClient {
     }
 
     async toggleBookmark(entryId) {
-        return this.request(`/entries/${entryId}/bookmark`, {
-            method: 'PUT'
-        });
+        return this.request(`/entries/${entryId}/bookmark`, { method: 'PUT' });
     }
 
-    // Fetch original article content (Readability mode)
     async fetchEntryContent(entryId) {
-        return this.request(`/entries/${entryId}/fetch-content?update_content=false`, {
-            method: 'GET'
-        });
+        return this.request(`/entries/${entryId}/fetch-content?update_content=false`, { method: 'GET' });
     }
 
-    // Categories (Groups)
-    async getCategories() {
-        return this.request('/categories');
-    }
+    // --- Categories ---
+
+    async getCategories() { return this.request('/categories'); }
 
     async createCategory(title) {
         return this.request('/categories', {
@@ -240,48 +216,30 @@ export class MinifluxClient {
     }
 
     async deleteCategory(categoryId) {
-        return this.request(`/categories/${categoryId}`, {
-            method: 'DELETE'
-        });
+        return this.request(`/categories/${categoryId}`, { method: 'DELETE' });
     }
 
-    // OPML
+    // --- OPML ---
+
     async importOPML(xmlData) {
-        // Miniflux API: POST /v1/import
-        // Content-Type: application/xml
-        // Body: The OPML content
-        const url = `${this.baseUrl}/v1/import`;
         const authHeader = this.getAuthHeader();
-
-        // We override content-type to application/xml
-        const headers = {
-            'Authorization': authHeader['Authorization'],
-            'Content-Type': 'application/xml'
-        };
-
-        const response = await fetch(url, {
+        return this.request('/import', {
             method: 'POST',
-            headers,
+            headers: {
+                ...authHeader,
+                'Content-Type': 'application/xml'
+            },
             body: xmlData
         });
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            throw new Error(`Miniflux API Import Error: ${response.status} ${response.statusText} - ${errorBody}`);
-        }
-
-        return response.json();
     }
 
     async exportOPML() {
-        // Miniflux API: GET /v1/export
-        // Returns the OPML XML content directly
+        const authHeader = this.getAuthHeader();
         const url = `${this.baseUrl}/v1/export`;
-        const headers = this.getAuthHeader();
 
         const response = await fetch(url, {
             method: 'GET',
-            headers
+            headers: authHeader
         });
 
         if (!response.ok) {

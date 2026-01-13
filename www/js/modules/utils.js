@@ -3,15 +3,13 @@
  * @module utils
  */
 
+const pad = (n) => String(n).padStart(2, '0');
+
 export function formatShortDate(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
     if (isNaN(date)) return '';
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    const hours = String(date.getHours()).padStart(2, '0');
-    const minutes = String(date.getMinutes()).padStart(2, '0');
-    return `${month}-${day} ${hours}:${minutes}`;
+    return `${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 export function safeIdForFilename(id) {

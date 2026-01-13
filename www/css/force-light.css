@@ -59,22 +59,11 @@
 }
 
 /* 强制亮色模式下的元素样式 */
-
-
-
-
-
 [data-color-scheme="light"] .article-content blockquote {
     color: var(--meta-color);
     background-color: color-mix(in srgb, var(--accent-color), transparent 96%);
     border-left-color: var(--accent-color);
 }
-
-
-
-
-
-
 
 [data-color-scheme="light"] .search-dialog-content {
     box-shadow: var(--card-shadow);

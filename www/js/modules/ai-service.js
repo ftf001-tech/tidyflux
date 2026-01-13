@@ -1,10 +1,8 @@
-/**
- * AI Service Module - 处理翻译和总结功能
- * @module ai-service
- */
-
 import { i18n } from './i18n.js';
 import { AuthManager } from './auth-manager.js';
+import { API_ENDPOINTS, STORAGE_KEYS } from '../constants.js';
+
+const DEFAULT_AI_MODEL = 'gpt-4.1-mini';
 
 // 默认提示词
 const DEFAULT_PROMPTS = {
@@ -26,9 +24,6 @@ export const AI_LANGUAGES = [
     { id: 'pt', name: 'Português', nameEn: 'Portuguese' },
     { id: 'ru', name: 'Русский', nameEn: 'Russian' }
 ];
-
-// AI 设置在 localStorage 中的键名
-const AI_CONFIG_KEY = 'tidyflux_ai_config';
 
 /**
  * AI 服务
@@ -57,14 +52,14 @@ export const AIService = {
         // 尝试从后端加载
         if (AuthManager.isLoggedIn()) {
             try {
-                const response = await AuthManager.fetchWithAuth('/api/preferences');
+                const response = await AuthManager.fetchWithAuth(API_ENDPOINTS.PREFERENCES.BASE);
                 if (response.ok) {
                     const prefs = await response.json();
                     if (prefs.ai_config) {
                         // 合并配置：后端覆盖本地
                         this._configCache = { ...this._getDefaultConfig(), ...prefs.ai_config };
                         // 更新本地备份
-                        localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(this._configCache));
+                        localStorage.setItem(STORAGE_KEYS.AI_CONFIG, JSON.stringify(this._configCache));
                     }
                 }
             } catch (e) {
@@ -76,7 +71,7 @@ export const AIService = {
 
     _loadLocalConfig() {
         try {
-            const config = localStorage.getItem(AI_CONFIG_KEY);
+            const config = localStorage.getItem(STORAGE_KEYS.AI_CONFIG);
             if (config) return JSON.parse(config);
         } catch (e) {
             console.error('Failed to parse AI config:', e);
@@ -88,7 +83,9 @@ export const AIService = {
         return {
             apiUrl: '',
             apiKey: '',
-            model: 'gpt-4.1-mini',
+            model: DEFAULT_AI_MODEL,
+            temperature: 1,
+            concurrency: 5,
             translatePrompt: '',
             summarizePrompt: '',
             digestPrompt: '',
@@ -135,12 +132,12 @@ export const AIService = {
      */
     async saveConfig(config) {
         this._configCache = config;
-        localStorage.setItem(AI_CONFIG_KEY, JSON.stringify(config));
+        localStorage.setItem(STORAGE_KEYS.AI_CONFIG, JSON.stringify(config));
         console.log('[AIService] Local saved. Syncing to remote...');
 
         if (AuthManager.isLoggedIn()) {
             try {
-                const response = await AuthManager.fetchWithAuth('/api/preferences', {
+                const response = await AuthManager.fetchWithAuth(API_ENDPOINTS.PREFERENCES.BASE, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -221,14 +218,15 @@ export const AIService = {
             throw new Error(i18n.t('ai.not_configured'));
         }
 
-        const response = await AuthManager.fetchWithAuth('/api/ai/chat', {
+        const response = await AuthManager.fetchWithAuth(API_ENDPOINTS.AI.CHAT, {
             method: 'POST',
             signal: signal,
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                model: config.model || 'gpt-4.1-mini',
+                model: config.model || DEFAULT_AI_MODEL,
+                temperature: config.temperature ?? 1,
                 messages: [
                     { role: 'user', content: prompt }
                 ],
@@ -245,19 +243,24 @@ export const AIService = {
             const reader = response.body.getReader();
             const decoder = new TextDecoder();
             let fullContent = '';
+            let buffer = ''; // 缓冲区，存储不完整的行
 
             try {
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    const chunk = decoder.decode(value, { stream: true });
-                    const lines = chunk.split('\n');
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+
+                    // 保留最后一个可能不完整的行
+                    buffer = lines.pop() || '';
 
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
-                            const dataStr = line.slice(6);
+                            const dataStr = line.slice(6).trim();
                             if (dataStr === '[DONE]') continue;
+                            if (!dataStr) continue;
 
                             try {
                                 const data = JSON.parse(dataStr);
@@ -267,7 +270,10 @@ export const AIService = {
                                     onChunk(content);
                                 }
                             } catch (e) {
-                                // 忽略解析错误
+                                // 仅在明显不是JSON时才warn，避免日志污染
+                                if (dataStr.startsWith('{')) {
+                                    console.warn('Failed to parse SSE data:', dataStr.substring(0, 50));
+                                }
                             }
                         }
                     }
@@ -316,9 +322,15 @@ export const AIService = {
      */
     extractText(html) {
         if (!html) return '';
-        const temp = document.createElement('div');
-        temp.innerHTML = html;
-        return temp.textContent || temp.innerText || '';
+        // 复用同一个隐藏元素，避免频繁创建DOM节点
+        if (!this._tempExtractElement) {
+            this._tempExtractElement = document.createElement('div');
+            this._tempExtractElement.style.display = 'none';
+        }
+        this._tempExtractElement.innerHTML = html;
+        const text = this._tempExtractElement.textContent || this._tempExtractElement.innerText || '';
+        this._tempExtractElement.innerHTML = ''; // 清空，避免内存泄漏
+        return text;
     },
 
     /**
@@ -326,7 +338,7 @@ export const AIService = {
      * @param {Object} config - { apiUrl, apiKey, model }
      */
     async testConnection(config) {
-        const response = await AuthManager.fetchWithAuth('/api/ai/test', {
+        const response = await AuthManager.fetchWithAuth(API_ENDPOINTS.AI.TEST, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

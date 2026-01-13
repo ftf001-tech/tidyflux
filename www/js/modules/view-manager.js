@@ -30,6 +30,8 @@ import {
 import { Modal } from './view/components.js';
 
 const STORAGE_KEY_FILTERS = 'tidyflux_list_filters';
+const BREAKPOINT_MOBILE = 800;
+const BREAKPOINT_TABLET = 1100;
 
 /**
  * ViewManager - 模块协调器
@@ -65,7 +67,7 @@ export const ViewManager = {
     /**
      * 初始化所有子模块
      */
-    _initSubModules() {
+    initSubModules() {
         AuthView.init(this);
         FeedsView.init(this);
         ArticlesView.init(this);
@@ -91,7 +93,7 @@ export const ViewManager = {
     // ==================== Auth 相关 ====================
 
     async showAuthView() {
-        this._initSubModules();
+        this.initSubModules();
         await AuthView.showAuthView();
     },
 
@@ -102,7 +104,7 @@ export const ViewManager = {
     // ==================== 布局初始化 ====================
 
     async initThreeColumnLayout() {
-        this._initSubModules();
+        this.initSubModules();
         document.title = 'Tidyflux';
         DOMElements.appContainer.style.display = 'flex';
 
@@ -238,7 +240,7 @@ export const ViewManager = {
             !AppState.currentGroupId && !AppState.viewingFavorites && !AppState.viewingDigests && AppState.articles.length > 0;
 
         if (isSame && !this.forceRefreshList) {
-            if (window.innerWidth <= 1100) this.showPanel('articles');
+            if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
             this._restoreScrollPosition();
             return;
         }
@@ -251,8 +253,6 @@ export const ViewManager = {
         AppState.searchQuery = '';
 
         AppState.currentFeedId = feedId;
-        AppState.currentGroupId = null;
-        AppState.viewingFavorites = false;
         AppState.currentGroupId = null;
         AppState.viewingFavorites = false;
         AppState.viewingDigests = false;
@@ -271,7 +271,7 @@ export const ViewManager = {
         }
 
         // 先显示面板，让骨架屏可见
-        if (window.innerWidth <= 1100) this.showPanel('articles');
+        if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
         await this.loadArticles(feedId, null);
     },
 
@@ -280,7 +280,7 @@ export const ViewManager = {
 
         // 检查是否需要跳过重复加载
         if (!AppState.isSearchMode && AppState.currentGroupId == groupId && AppState.articles.length > 0 && !this.forceRefreshList) {
-            if (window.innerWidth <= 1100) this.showPanel('articles');
+            if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
             this._restoreScrollPosition();
             return;
         }
@@ -295,7 +295,6 @@ export const ViewManager = {
         AppState.currentFeedId = null;
         AppState.currentGroupId = groupId;
         AppState.viewingFavorites = false;
-        AppState.viewingFavorites = false;
         AppState.viewingDigests = false;
 
         const saved = this.loadFilterSetting(`group_${groupId}`);
@@ -307,7 +306,7 @@ export const ViewManager = {
         DOMElements.currentFeedTitle.textContent = group?.name || i18n.t('nav.group_articles');
 
         // 先显示面板，让骨架屏可见
-        if (window.innerWidth <= 1100) this.showPanel('articles');
+        if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
         await this.loadArticles(null, groupId);
     },
 
@@ -316,7 +315,7 @@ export const ViewManager = {
 
         // 检查是否需要跳过重复加载
         if (!AppState.isSearchMode && AppState.viewingFavorites === true && AppState.articles.length > 0 && !this.forceRefreshList) {
-            if (window.innerWidth <= 1100) this.showPanel('articles');
+            if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
             this._restoreScrollPosition();
             return;
         }
@@ -331,16 +330,14 @@ export const ViewManager = {
         AppState.currentFeedId = null;
         AppState.currentGroupId = null;
         AppState.viewingFavorites = true;
-        AppState.viewingFavorites = true;
         AppState.viewingDigests = false;
-        AppState.showUnreadOnly = false;
         AppState.showUnreadOnly = false;
 
         this.updateSidebarActiveState({ favorites: true });
         DOMElements.currentFeedTitle.textContent = i18n.t('nav.starred');
 
         // 先显示面板，让骨架屏可见
-        if (window.innerWidth <= 1100) this.showPanel('articles');
+        if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
         await this.loadArticles(null, null);
     },
 
@@ -348,7 +345,7 @@ export const ViewManager = {
         await this.waitForFeedsLoaded();
 
         if (!AppState.isSearchMode && AppState.viewingDigests === true && AppState.articles.length > 0 && !this.forceRefreshList) {
-            if (window.innerWidth <= 1100) this.showPanel('articles');
+            if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
             this._restoreScrollPosition();
             return;
         }
@@ -368,7 +365,7 @@ export const ViewManager = {
         this.updateSidebarActiveState({ digests: true });
         DOMElements.currentFeedTitle.textContent = i18n.t('nav.briefings');
 
-        if (window.innerWidth <= 1100) this.showPanel('articles');
+        if (window.innerWidth <= BREAKPOINT_TABLET) this.showPanel('articles');
         await this.loadArticles(null, null);
     },
 
@@ -578,7 +575,7 @@ export const ViewManager = {
 
     handleWindowResize() {
         // 仅在移动端尺寸下处理面板显示逻辑
-        if (window.innerWidth <= 800) {
+        if (window.innerWidth <= BREAKPOINT_MOBILE) {
             // 如果有选中文章且当前路由是文章页，优先显示文章内容
             // Fix: 增加路由判断，防止在列表页(如 #/all) 且有残留 currentArticleId 时，
             // 触发 resize (如键盘弹出) 导致错误跳回文章页
@@ -593,8 +590,8 @@ export const ViewManager = {
             else {
                 this.showPanel('articles');
             }
-        } else if (window.innerWidth <= 1100) {
-            // 平板/窄屏模式 (801-1100px)
+        } else if (window.innerWidth <= BREAKPOINT_TABLET) {
+            // 平板/窄屏模式
             // 如果路由是 feeds，显示 feeds 面板 (作为 overlay)
             if (window.location.hash === '#/feeds') {
                 this.showPanel('feeds');
@@ -650,13 +647,21 @@ export const ViewManager = {
             window.location.hash = '#/feeds';
         });
 
+        // Throttled scroll handler
+        let scrollTicking = false;
         DOMElements.articlesList?.addEventListener('scroll', () => {
-            ArticlesView.handleArticlesScroll();
+            if (!scrollTicking) {
+                window.requestAnimationFrame(() => {
+                    ArticlesView.handleArticlesScroll();
+                    scrollTicking = false;
+                });
+                scrollTicking = true;
+            }
         });
 
         // 点击外部关闭订阅源面板 (仅在 801-1100px 双栏模式下有效)
         document.addEventListener('click', (e) => {
-            if (window.innerWidth > 800 && window.innerWidth <= 1100) {
+            if (window.innerWidth > BREAKPOINT_MOBILE && window.innerWidth <= BREAKPOINT_TABLET) {
                 const feedsPanel = DOMElements.feedsPanel;
                 const toggleBtn = document.getElementById('show-feeds-btn');
 

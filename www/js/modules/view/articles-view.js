@@ -1,14 +1,25 @@
-/**
- * ArticlesView - 文章列表视图模块
- * @module view/articles-view
- */
-
 import { DOMElements } from '../../dom.js';
 import { AppState } from '../../state.js';
 import { FeedManager } from '../feed-manager.js';
 import { VirtualList } from '../virtual-list.js';
 import { formatDate, isMobileDevice, extractFirstImage, getThumbnailUrl, showToast, escapeHtml } from './utils.js';
-import { i18n } from '../../modules/i18n.js';
+import { i18n } from '../i18n.js';
+
+/**
+ * 列表判定与功能常量配置
+ */
+const ARTICLES_CONFIG = {
+    VIRTUAL_SCROLL_THRESHOLD: 50,      // 触发虚拟滚动的文章数量阈值
+    PAGINATION_LIMIT: 50,              // 每页加载的文章数量
+    SCROLL_TOP_THRESHOLD: 300,         // 显示回到顶部按钮的滚动高度
+    NEW_ARTICLES_CHECK_MS: 60 * 1000,  // 新文章轮询间隔 (1分钟)
+    VIRTUAL_ITEM_HEIGHT: 85,           // 虚拟列表项预计高度
+    VIRTUAL_BUFFER_SIZE: 8,            // 虚拟列表缓冲区页数
+    SKELETON_COUNT: 12,                // 初始加载时的骨架屏数量
+    SCROLL_END_DELAY: 1000,            // 判定滚动停止的延迟 (ms)
+    SCROLL_READ_DELAY: 150,            // 滚动标记已读的防抖延迟 (ms)
+    PRELOAD_THRESHOLD_PX: 800          // 触发下一页预加载的底部剩余高度
+};
 
 /**
  * 文章列表视图管理
@@ -20,8 +31,6 @@ export const ArticlesView = {
     virtualList: null,
     /** 是否使用虚拟滚动 */
     useVirtualScroll: false,
-    /** 虚拟滚动阈值 (降低阈值以尽早启用虚拟滚动，防止 DOM 节点过多)    // 虚拟滚动配置 */
-    virtualScrollThreshold: 50,
     /** 是否正在加载更多 */
     isLoadingMore: false,
     /** 轮询定时器 */
@@ -39,6 +48,7 @@ export const ArticlesView = {
     /** 是否正在预加载 */
     isPreloading: false,
 
+
     /**
      * 初始化模块
      * @param {Object} viewManager - ViewManager 实例引用
@@ -49,84 +59,92 @@ export const ArticlesView = {
 
     /**
      * 加载文章列表
-     * @param {string|null} feedId - 订阅源 ID
-     * @param {string|null} groupId - 分组 ID
      */
     async loadArticles(feedId, groupId = null) {
-        // 生成本次请求 ID，防止竞态条件（"凤凰"现象：前一个慢请求覆盖后一个快请求）
         const requestId = Date.now();
         this.currentRequestId = requestId;
 
-        // Reset pagination state to prevent race conditions with loadMoreArticles
-        AppState.pagination = null;
-        // 清空文章状态，防止旧数据干扰
-        AppState.articles = [];
+        this._resetListState();
 
+        try {
+            if (AppState.viewingDigests) {
+                await this._loadDigestItems(requestId);
+            } else {
+                await this._loadNormalArticles(requestId, feedId, groupId);
+            }
+        } catch (err) {
+            if (this.currentRequestId === requestId) {
+                console.error('Load articles error:', err);
+                DOMElements.articlesList.innerHTML = `<div class="error-msg">${i18n.t('common.load_error')}</div>`;
+            }
+        }
+    },
+
+    /**
+     * 重置列表显示状态
+     */
+    _resetListState() {
+        AppState.pagination = null;
+        AppState.articles = [];
         this.stopNewArticlesPoller();
 
-        // 销毁现有虚拟列表
         if (this.virtualList) {
             this.virtualList.destroy();
             this.virtualList = null;
         }
         this.useVirtualScroll = false;
 
-        // 显示骨架屏，并重置滚动位置
-        DOMElements.articlesList.innerHTML = this.generateSkeletonHTML(12);
+        DOMElements.articlesList.innerHTML = this.generateSkeletonHTML(ARTICLES_CONFIG.SKELETON_COUNT);
         DOMElements.articlesList.scrollTop = 0;
+    },
 
-        try {
-            if (AppState.viewingDigests) {
-                // 加载简报列表
-                const result = await FeedManager.getDigests({
-                    unreadOnly: AppState.showUnreadOnly
-                });
+    /**
+     * 加载简报列表
+     */
+    async _loadDigestItems(requestId) {
+        const result = await FeedManager.getDigests({
+            unreadOnly: AppState.showUnreadOnly
+        });
 
-                // 如果已经切换到其他视图，忽略旧结果
-                if (this.currentRequestId !== requestId) return;
+        if (this.currentRequestId !== requestId) return;
 
-                const digestsData = result.digests || { pinned: [], normal: [] };
+        const digestsData = result.digests || { pinned: [], normal: [] };
+        const allItems = this.mergeDigestsAndArticles(digestsData, []);
 
-                // 确保 Unread (Pinned) 在前，Normal 在后
-                // 还可以进一步按时间排序
-                const allItems = this.mergeDigestsAndArticles(digestsData, []);
+        AppState.articles = allItems;
+        AppState.pagination = {
+            page: 1,
+            limit: 100,
+            total: allItems.length,
+            totalPages: 1,
+            hasMore: false
+        };
 
-                AppState.articles = allItems;
-                // Briefings don't fully support pagination the same way yet, or we assume all loaded for now
-                AppState.pagination = { page: 1, limit: 100, total: allItems.length, totalPages: 1, hasMore: false };
+        this.renderArticlesList(allItems);
+    },
 
-                this.renderArticlesList(allItems);
-            } else {
-                // 加载普通文章列表 (不加载简报)
-                const articlesResult = await FeedManager.getArticles(
-                    1,
-                    feedId,
-                    groupId,
-                    AppState.showUnreadOnly,
-                    AppState.viewingFavorites
-                );
+    /**
+     * 加载普通文章列表
+     */
+    async _loadNormalArticles(requestId, feedId, groupId) {
+        const articlesResult = await FeedManager.getArticles({
+            page: 1,
+            feedId,
+            groupId,
+            unreadOnly: AppState.showUnreadOnly,
+            favorites: AppState.viewingFavorites
+        });
 
-                // 如果已经切换到其他视图，忽略旧结果
-                if (this.currentRequestId !== requestId) return;
+        if (this.currentRequestId !== requestId) return;
 
-                AppState.articles = articlesResult.articles;
-                AppState.pagination = articlesResult.pagination;
-                AppState.pagination.page = 1;
+        AppState.articles = articlesResult.articles;
+        AppState.pagination = articlesResult.pagination;
+        AppState.pagination.page = 1;
 
-                this.renderArticlesList(articlesResult.articles);
-                this.startNewArticlesPoller();
-                this.checkUnreadDigestsAndShowToast();
-
-                // 首页加载完成后，静默预加载下一页
-                this.preloadNextPage();
-            }
-        } catch (err) {
-            // 如果是当前请求报错，才显示错误信息
-            if (this.currentRequestId === requestId) {
-                console.error('Load articles error:', err);
-                DOMElements.articlesList.innerHTML = `<div class="error-msg">${i18n.t('common.load_error')}</div>`;
-            }
-        }
+        this.renderArticlesList(articlesResult.articles);
+        this.startNewArticlesPoller();
+        this.checkUnreadDigestsAndShowToast();
+        this.preloadNextPage();
     },
 
     /**
@@ -204,7 +222,7 @@ export const ArticlesView = {
 
 
         // 决定是否使用虚拟滚动
-        if (isMobileDevice() || articles.length >= this.virtualScrollThreshold) {
+        if (isMobileDevice() || articles.length >= ARTICLES_CONFIG.VIRTUAL_SCROLL_THRESHOLD) {
             this.useVirtualScroll = true;
             this.initVirtualList();
 
@@ -247,7 +265,7 @@ export const ArticlesView = {
 
         // 强强制逻辑：只要总数量超过阈值，或者已经启用了虚拟列表，就必须走虚拟列表路径
         // Fallback: 如果 virtualList 实例意外丢失但数量很多，重新初始化
-        if (this.useVirtualScroll || AppState.articles.length >= this.virtualScrollThreshold) {
+        if (this.useVirtualScroll || AppState.articles.length >= ARTICLES_CONFIG.VIRTUAL_SCROLL_THRESHOLD) {
             if (!this.virtualList) {
                 console.warn('VirtualList missing in append mode, re-initializing...');
                 // 如果没有实例，可能是从未初始化过，需要用全量数据初始化
@@ -258,15 +276,6 @@ export const ArticlesView = {
 
             // 正常追加
             this.virtualList.appendItems(articles);
-
-            // 确保加载更多指示器在底部
-            if (DOMElements.loadMoreTrigger) {
-                // 如果在虚拟列表里，加载更多指示器其实应该由虚拟列表管理或者放在列表外？
-                // 目前 VirtualList 实现里似乎没有包含 loadMoreTrigger 的 DOM，它是放在 container 最底部的？
-                // 如果 DOMElements.loadMoreTrigger 被 append 到 container，可能会被 virtual list 的 innerHTML='' 清除？
-                // VirtualList 有 spacerBottom，我们应该把 trigger 放在列表外部，或者让 VirtualList 处理。
-                // 暂时保持原样，如果 VirtualList 不管理它，它可能显示不出来。
-            }
             return;
         }
 
@@ -289,8 +298,8 @@ export const ArticlesView = {
         const self = this;
         this.virtualList = new VirtualList({
             container: DOMElements.articlesList,
-            itemHeight: 85,
-            bufferSize: 8,
+            itemHeight: ARTICLES_CONFIG.VIRTUAL_ITEM_HEIGHT,
+            bufferSize: ARTICLES_CONFIG.VIRTUAL_BUFFER_SIZE,
             renderItem: (item) => self.generateSingleArticleHTML(item),
             onItemClick: (item) => self.viewManager.selectArticle(item.id),
             onLoadMore: () => {
@@ -504,13 +513,13 @@ export const ArticlesView = {
             if (AppState.isSearchMode && AppState.searchQuery) {
                 result = await FeedManager.searchArticles(AppState.searchQuery, nextPage);
             } else {
-                result = await FeedManager.getArticles(
-                    nextPage,
-                    AppState.currentFeedId,
-                    AppState.currentGroupId,
-                    AppState.showUnreadOnly,
-                    AppState.viewingFavorites
-                );
+                result = await FeedManager.getArticles({
+                    page: nextPage,
+                    feedId: AppState.currentFeedId,
+                    groupId: AppState.currentGroupId,
+                    unreadOnly: AppState.showUnreadOnly,
+                    favorites: AppState.viewingFavorites
+                });
             }
 
             if (this.currentRequestId !== requestId) return;
@@ -567,13 +576,13 @@ export const ArticlesView = {
             if (AppState.isSearchMode && AppState.searchQuery) {
                 result = await FeedManager.searchArticles(AppState.searchQuery, nextPage);
             } else {
-                result = await FeedManager.getArticles(
-                    nextPage,
-                    AppState.currentFeedId,
-                    AppState.currentGroupId,
-                    AppState.showUnreadOnly,
-                    AppState.viewingFavorites
-                );
+                result = await FeedManager.getArticles({
+                    page: nextPage,
+                    feedId: AppState.currentFeedId,
+                    groupId: AppState.currentGroupId,
+                    unreadOnly: AppState.showUnreadOnly,
+                    favorites: AppState.viewingFavorites
+                });
             }
 
             // 只有当请求 ID 没变（用户没切换页面），且页码仍然匹配时才缓存
@@ -596,8 +605,7 @@ export const ArticlesView = {
      */
     startNewArticlesPoller() {
         this.stopNewArticlesPoller();
-        const intervalMinutes = 1;
-        this.checkInterval = setInterval(() => this.checkForNewArticles(), intervalMinutes * 60 * 1000);
+        this.checkInterval = setInterval(() => this.checkForNewArticles(), ARTICLES_CONFIG.NEW_ARTICLES_CHECK_MS);
     },
 
     /**
@@ -648,13 +656,13 @@ export const ArticlesView = {
 
         try {
             const existingIds = new Set(AppState.articles.map(a => a.id));
-            const result = await FeedManager.getArticles(
-                1,
-                AppState.currentFeedId,
-                AppState.currentGroupId,
-                true,
-                false
-            );
+            const result = await FeedManager.getArticles({
+                page: 1,
+                feedId: AppState.currentFeedId,
+                groupId: AppState.currentGroupId,
+                unreadOnly: true,
+                favorites: false
+            });
 
             if (this.currentRequestId !== requestId) return;
 
@@ -739,7 +747,7 @@ export const ArticlesView = {
         this.scrollEndTimer = setTimeout(() => {
             this.isScrolling = false;
             this.scrollEndTimer = null;
-        }, 1000);
+        }, ARTICLES_CONFIG.SCROLL_END_DELAY);
 
         const scrollTop = list.scrollTop;
         const scrollHeight = list.scrollHeight;
@@ -747,7 +755,7 @@ export const ArticlesView = {
 
         // 控制回到顶部按钮显示
         if (DOMElements.scrollToTopBtn) {
-            if (scrollTop > 300) {
+            if (scrollTop > ARTICLES_CONFIG.SCROLL_TOP_THRESHOLD) {
                 DOMElements.scrollToTopBtn.classList.add('visible');
             } else {
                 DOMElements.scrollToTopBtn.classList.remove('visible');
@@ -755,7 +763,7 @@ export const ArticlesView = {
         }
 
         // 提前加载：当距离底部小于 2 个视口高度时开始预加载
-        const preloadThreshold = Math.max(800, clientHeight * 2);
+        const preloadThreshold = Math.max(ARTICLES_CONFIG.PRELOAD_THRESHOLD_PX, clientHeight * 2);
         if (scrollHeight - scrollTop - clientHeight < preloadThreshold) {
             this.loadMoreArticles();
         }
@@ -766,7 +774,7 @@ export const ArticlesView = {
             this._scrollReadTimeout = setTimeout(() => {
                 this._scrollReadTimeout = null;
                 this.checkScrollReadForNormalList(list);
-            }, 150);
+            }, ARTICLES_CONFIG.SCROLL_READ_DELAY);
         }
     },
 
@@ -828,7 +836,8 @@ export const ArticlesView = {
         });
 
         try {
-            await Promise.all(ids.map(id => FeedManager.markAsRead(id)));
+            // Use batch API instead of N+1 individual calls
+            await FeedManager.markAsReadBatch(ids);
             await this.viewManager.refreshFeedCounts();
         } catch (err) {
             console.error('Scroll mark as read failed:', err);

@@ -1,20 +1,13 @@
-/**
- * Authentication Manager Module
- * @module auth-manager
- */
-
 import { i18n } from './i18n.js';
-
-const AUTH_TOKEN_KEY = 'tinyflux_token';
-const AUTH_USER_KEY = 'tinyflux_user';
+import { API_ENDPOINTS, AUTH_KEYS } from '../constants.js';
 
 export const AuthManager = {
     getToken() {
-        return localStorage.getItem(AUTH_TOKEN_KEY);
+        return localStorage.getItem(AUTH_KEYS.TOKEN);
     },
 
     getUser() {
-        const user = localStorage.getItem(AUTH_USER_KEY);
+        const user = localStorage.getItem(AUTH_KEYS.USER);
         return user ? JSON.parse(user) : null;
     },
 
@@ -23,17 +16,17 @@ export const AuthManager = {
     },
 
     setAuth(token, user) {
-        localStorage.setItem(AUTH_TOKEN_KEY, token);
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(user));
+        localStorage.setItem(AUTH_KEYS.TOKEN, token);
+        localStorage.setItem(AUTH_KEYS.USER, JSON.stringify(user));
     },
 
     clearAuth() {
-        localStorage.removeItem(AUTH_TOKEN_KEY);
-        localStorage.removeItem(AUTH_USER_KEY);
+        localStorage.removeItem(AUTH_KEYS.TOKEN);
+        localStorage.removeItem(AUTH_KEYS.USER);
     },
 
     async register(email, password) {
-        const response = await fetch('/api/auth/register', {
+        const response = await fetch(API_ENDPOINTS.AUTH.REGISTER, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ email, password })
@@ -50,7 +43,7 @@ export const AuthManager = {
 
     async login(username, password) {
         // Send credentials to backend
-        const response = await fetch('/api/auth/login', {
+        const response = await fetch(API_ENDPOINTS.AUTH.LOGIN, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
@@ -86,7 +79,7 @@ export const AuthManager = {
     },
 
     async changePassword(newPassword) {
-        const response = await this.fetchWithAuth('/api/auth/change-password', {
+        const response = await this.fetchWithAuth(API_ENDPOINTS.AUTH.CHANGE_PASSWORD, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -102,7 +95,7 @@ export const AuthManager = {
     },
 
     async getMinifluxConfig() {
-        const response = await this.fetchWithAuth('/api/auth/miniflux-config');
+        const response = await this.fetchWithAuth(API_ENDPOINTS.AUTH.MINIFLUX_CONFIG);
 
         const data = await response.json();
         if (!response.ok) {
@@ -113,7 +106,7 @@ export const AuthManager = {
 
     async getMinifluxStatus() {
         // Status check should be resilient, but if 401 occurs, fetchWithAuth handles it.
-        const response = await this.fetchWithAuth('/api/auth/miniflux-status');
+        const response = await this.fetchWithAuth(API_ENDPOINTS.AUTH.MINIFLUX_STATUS);
 
         const data = await response.json();
         if (!response.ok) {
@@ -124,7 +117,7 @@ export const AuthManager = {
     },
 
     async saveMinifluxConfig(url, username, password, apiKey, authType) {
-        const response = await this.fetchWithAuth('/api/auth/miniflux-config', {
+        const response = await this.fetchWithAuth(API_ENDPOINTS.AUTH.MINIFLUX_CONFIG, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -140,7 +133,7 @@ export const AuthManager = {
     },
 
     async testMinifluxConnection(url, username, password, apiKey, authType) {
-        const response = await this.fetchWithAuth('/api/auth/miniflux-test', {
+        const response = await this.fetchWithAuth(API_ENDPOINTS.AUTH.MINIFLUX_TEST, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'

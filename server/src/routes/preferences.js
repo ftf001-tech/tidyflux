@@ -4,19 +4,23 @@ import { PreferenceStore } from '../utils/preference-store.js';
 
 const router = express.Router();
 
+// Helper to mask sensitive data (returns a new object, never mutates input)
+const maskSensitiveData = (prefs) => {
+    if (!prefs) return prefs;
+    // Deep clone to avoid mutating cached objects
+    const masked = JSON.parse(JSON.stringify(prefs));
+    if (masked?.ai_config?.apiKey) {
+        masked.ai_config.apiKey = '********';
+    }
+    return masked;
+};
+
 // Get all preferences
-router.get('/', authenticateToken, (req, res) => {
+router.get('/', authenticateToken, async (req, res) => {
     try {
         const userId = PreferenceStore.getUserId(req.user);
-        console.log('Loading preferences for user:', userId);
-        const prefs = PreferenceStore.get(userId);
-
-        // Mask AI API Key
-        if (prefs && prefs.ai_config && prefs.ai_config.apiKey) {
-            prefs.ai_config.apiKey = '********';
-        }
-
-        res.json(prefs);
+        const prefs = await PreferenceStore.get(userId);
+        res.json(maskSensitiveData(prefs));
     } catch (error) {
         console.error('Get preferences error:', error);
         res.status(500).json({ error: '获取偏好设置失败' });
@@ -24,45 +28,35 @@ router.get('/', authenticateToken, (req, res) => {
 });
 
 // Update preferences (merge with existing)
-router.post('/', authenticateToken, (req, res) => {
+router.post('/', authenticateToken, async (req, res) => {
     try {
         const userId = PreferenceStore.getUserId(req.user);
-        console.log('Saving preferences for user:', userId, 'body:', req.body);
-        const currentPrefs = PreferenceStore.get(userId);
+        const currentPrefs = await PreferenceStore.get(userId);
 
         let updates = req.body;
 
         // 处理 { key, value } 格式的请求
         if (updates.key !== undefined && updates.value !== undefined) {
-            const key = updates.key;
-            const value = updates.value;
-            updates = { [key]: value };
+            updates = { [updates.key]: updates.value };
         }
 
         // Special handling for ai_config updates to preserve API Key if masked
-        if (updates.ai_config) {
-            // If the new key is masked, restore the old key
-            if (updates.ai_config.apiKey === '********') {
-                if (currentPrefs.ai_config && currentPrefs.ai_config.apiKey) {
-                    updates.ai_config.apiKey = currentPrefs.ai_config.apiKey;
-                } else {
-                    // If no old key exists, remove the masked value to avoid saving garbage
-                    delete updates.ai_config.apiKey;
-                }
+        if (updates.ai_config?.apiKey === '********') {
+            if (currentPrefs.ai_config?.apiKey) {
+                updates.ai_config.apiKey = currentPrefs.ai_config.apiKey;
+            } else {
+                delete updates.ai_config.apiKey;
             }
         }
 
         // 合并更新
         const newPrefs = { ...currentPrefs, ...updates };
-        console.log('New preferences:', newPrefs);
 
-        if (PreferenceStore.save(userId, newPrefs)) {
+        if (await PreferenceStore.save(userId, newPrefs)) {
             // Return masked key in response
+            // Create a copy to mask without affecting what was just saved
             const responsePrefs = JSON.parse(JSON.stringify(newPrefs));
-            if (responsePrefs.ai_config && responsePrefs.ai_config.apiKey) {
-                responsePrefs.ai_config.apiKey = '********';
-            }
-            res.json({ success: true, preferences: responsePrefs });
+            res.json({ success: true, preferences: maskSensitiveData(responsePrefs) });
         } else {
             res.status(500).json({ error: '保存偏好设置失败' });
         }

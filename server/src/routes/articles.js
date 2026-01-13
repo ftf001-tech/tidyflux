@@ -1,8 +1,29 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
-import { extractThumbnailUrl, extractFirstImage, getThumbnailUrl } from '../utils.js';
+import { extractThumbnailUrl, extractFirstImage, getThumbnailUrl, sanitizeHtml } from '../utils.js';
 
 const router = express.Router();
+
+/**
+ * Helper to map Miniflux entry to Tidyflux Article
+ * Content is passed through without sanitization - RSS sources are trusted
+ */
+function mapEntryToArticle(entry, thumbnail) {
+    return {
+        id: entry.id,
+        feed_id: entry.feed_id,
+        title: entry.title || '',
+        summary: '',
+        content: entry.content || '', // No sanitization - display exactly as RSS provides
+        url: entry.url,
+        author: entry.author || '',
+        published_at: entry.published_at,
+        thumbnail_url: thumbnail,
+        feed_title: entry.feed?.title || '',
+        is_read: entry.status === 'read' ? 1 : 0,
+        is_favorited: entry.starred ? 1 : 0
+    };
+}
 
 // Get articles
 router.get('/', authenticateToken, async (req, res) => {
@@ -83,20 +104,7 @@ router.get('/', authenticateToken, async (req, res) => {
                 thumbnail = getThumbnailUrl(rawImageUrl);
             }
 
-            return {
-                id: entry.id,
-                feed_id: entry.feed_id,
-                title: entry.title,
-                summary: '', // Miniflux doesn't give plain summary easily
-                content: entry.content,
-                url: entry.url,
-                author: entry.author,
-                published_at: entry.published_at,
-                thumbnail_url: thumbnail,
-                feed_title: entry.feed ? entry.feed.title : '',
-                is_read: entry.status === 'read' ? 1 : 0,
-                is_favorited: entry.starred ? 1 : 0
-            };
+            return mapEntryToArticle(entry, thumbnail);
         });
 
         // 异步预热缩略图缓存
@@ -134,22 +142,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
             thumbnail = extractThumbnailUrl(entry.content, '');
         }
 
-        const article = {
-            id: entry.id,
-            feed_id: entry.feed_id,
-            title: entry.title,
-            summary: '',
-            content: entry.content,
-            url: entry.url,
-            author: entry.author,
-            published_at: entry.published_at,
-            thumbnail_url: thumbnail,
-            feed_title: entry.feed ? entry.feed.title : '',
-            is_read: entry.status === 'read' ? 1 : 0,
-            is_favorited: entry.starred ? 1 : 0
-        };
-
-        res.json(article);
+        res.json(mapEntryToArticle(entry, thumbnail));
     } catch (error) {
         console.error('Get article error:', error);
         if (error.message.includes('404')) {
@@ -180,6 +173,23 @@ router.delete('/:id/read', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Mark unread error:', error);
         res.status(500).json({ error: '标记失败' });
+    }
+});
+
+// Batch mark read (multiple articles in one request)
+router.post('/batch-read', authenticateToken, async (req, res) => {
+    try {
+        const { ids } = req.body;
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ error: 'Invalid ids array' });
+        }
+
+        // Miniflux supports batch update: PUT /v1/entries with { entry_ids: [...], status: 'read' }
+        await req.miniflux.updateEntriesStatus(ids.map(id => parseInt(id)), 'read');
+        res.json({ success: true, count: ids.length });
+    } catch (error) {
+        console.error('Batch mark read error:', error);
+        res.status(500).json({ error: '批量标记失败' });
     }
 });
 
@@ -242,11 +252,11 @@ router.delete('/:id/favorite', authenticateToken, async (req, res) => {
 router.put('/:id/fetch-content', authenticateToken, async (req, res) => {
     try {
         const { id } = req.params;
-        // Miniflux API returns { content: "..." }
-        const contentData = await req.miniflux.fetchEntryContent(id);
-
-
-        const entry = await req.miniflux.getEntry(id);
+        // Run both requests in parallel
+        const [contentData, entry] = await Promise.all([
+            req.miniflux.fetchEntryContent(id),
+            req.miniflux.getEntry(id)
+        ]);
 
         // Override content with the fetched version
         if (contentData && contentData.content) {
@@ -263,22 +273,7 @@ router.put('/:id/fetch-content', authenticateToken, async (req, res) => {
             thumbnail = extractThumbnailUrl(entry.content, '');
         }
 
-        const article = {
-            id: entry.id,
-            feed_id: entry.feed_id,
-            title: entry.title,
-            summary: '',
-            content: entry.content,
-            url: entry.url,
-            author: entry.author,
-            published_at: entry.published_at,
-            thumbnail_url: thumbnail,
-            feed_title: entry.feed ? entry.feed.title : '',
-            is_read: entry.status === 'read' ? 1 : 0,
-            is_favorited: entry.starred ? 1 : 0
-        };
-
-        res.json(article);
+        res.json(mapEntryToArticle(entry, thumbnail));
     } catch (error) {
         console.error('Fetch content error:', error);
         console.error('Error details:', error.message);

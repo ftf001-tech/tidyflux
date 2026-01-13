@@ -1,5 +1,6 @@
 import express from 'express';
 import { authenticateToken } from '../middleware/auth.js';
+import { sanitizeHtml } from '../utils.js';
 
 const router = express.Router();
 
@@ -68,9 +69,14 @@ router.post('/', authenticateToken, async (req, res) => {
             id = feedId.feed_id;
         }
 
-        // Fetch the new feed to return complete object
-        const feeds = await req.miniflux.getFeeds();
-        const newFeed = feeds.find(f => f.id === id);
+        // Fetch the new feed directly by ID (O(1) instead of O(N))
+        let newFeed;
+        try {
+            newFeed = await req.miniflux.getFeed(id);
+        } catch (e) {
+            // Fallback if getFeed fails
+            newFeed = null;
+        }
 
         if (newFeed) {
             res.status(201).json({
@@ -147,7 +153,13 @@ router.post('/refresh-group/:groupId', authenticateToken, async (req, res) => {
         const feeds = await req.miniflux.getFeeds();
         const groupFeeds = feeds.filter(f => f.category && f.category.id == groupId);
 
-        await Promise.all(groupFeeds.map(feed => req.miniflux.refreshFeed(feed.id)));
+        // Limit concurrency to prevent overwhelming Miniflux API
+        const CONCURRENCY_LIMIT = 5;
+        const results = [];
+        for (let i = 0; i < groupFeeds.length; i += CONCURRENCY_LIMIT) {
+            const batch = groupFeeds.slice(i, i + CONCURRENCY_LIMIT);
+            await Promise.all(batch.map(feed => req.miniflux.refreshFeed(feed.id)));
+        }
 
         res.json({ success: true, count: groupFeeds.length });
     } catch (error) {

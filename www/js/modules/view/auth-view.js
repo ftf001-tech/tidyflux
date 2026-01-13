@@ -76,12 +76,15 @@ export const AuthView = {
                 DOMElements.authContainer.style.display = 'none';
                 DOMElements.appContainer.style.display = 'flex';
 
-                // 初始化 AI 服务
-                await AIService.init();
+                // Parallelize initialization
+                const aiInitPromise = AIService.init();
+                const configPromise = AuthManager.getMinifluxConfig();
+
+                await aiInitPromise; // Wait for AI init (non-blocking for login flow usually, but good to have)
 
                 // 检查 Miniflux 配置
                 try {
-                    const minifluxConfig = await AuthManager.getMinifluxConfig();
+                    const minifluxConfig = await configPromise;
                     if (!minifluxConfig.configured) {
                         // 未配置 Miniflux，显示强制设置对话框
                         this.viewManager.showSettingsDialog(true);

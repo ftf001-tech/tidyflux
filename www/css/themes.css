@@ -59,23 +59,11 @@
         --hover-bg: rgba(255, 255, 255, 0.04);
     }
 
-
-
-
-
-
     .article-content blockquote {
         color: var(--meta-color);
         background-color: color-mix(in srgb, var(--accent-color), transparent 92%);
         border-left-color: var(--accent-color);
     }
-
-
-
-
-
-
-
 
     .search-dialog-content,
     .add-feed-dialog-content,

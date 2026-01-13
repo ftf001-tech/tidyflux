@@ -1,36 +1,52 @@
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
+import { promisify } from 'util';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const pbkdf2 = promisify(crypto.pbkdf2);
+
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
+// Security Constants
+const PBKDF2_ITERATIONS = 1000;
+const PBKDF2_KEYLEN = 64;
+const PBKDF2_DIGEST = 'sha512';
+const DEFAULT_ADMIN = {
+    username: 'admin',
+    password: 'admin'
+};
+
 // Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!existsSync(DATA_DIR)) {
+    mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function loadUsers() {
+async function loadUsers() {
     try {
-        if (fs.existsSync(USERS_FILE)) {
-            const data = fs.readFileSync(USERS_FILE, 'utf8');
-            return JSON.parse(data);
-        }
+        const data = await fs.readFile(USERS_FILE, 'utf8');
+        return JSON.parse(data);
     } catch (error) {
-        console.error('Error loading users:', error);
+        if (error.code !== 'ENOENT') {
+            console.error('Error loading users:', error);
+        }
     }
     return {};
 }
 
-function saveUsers(users) {
+async function saveUsers(users) {
     try {
-        const options = { encoding: 'utf8', mode: 0o600 };
-        fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), options);
+        const data = JSON.stringify(users, null, 2);
+        await fs.writeFile(USERS_FILE, data, { encoding: 'utf8', mode: 0o600 });
         try {
-            // writeFileSync mode option only works on creation, force chmod for existing files
-            fs.chmodSync(USERS_FILE, 0o600);
+            await fs.chmod(USERS_FILE, 0o600);
         } catch (e) {
-            // Ignore chmod errors on systems that don't support it (e.g. some Docker mounts/Windows)
+            // Ignore chmod errors on unsupported systems
         }
         return true;
     } catch (error) {
@@ -39,44 +55,44 @@ function saveUsers(users) {
     }
 }
 
-function hashPassword(password, salt) {
+async function hashPassword(password, salt) {
     if (!salt) {
         salt = crypto.randomBytes(16).toString('hex');
     }
-    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
-    return { hash, salt };
+    const hashBuffer = await pbkdf2(password, salt, PBKDF2_ITERATIONS, PBKDF2_KEYLEN, PBKDF2_DIGEST);
+    return { hash: hashBuffer.toString('hex'), salt };
 }
 
-function verifyPassword(password, storedHash, salt) {
-    const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, 'sha512').toString('hex');
+async function verifyPassword(password, storedHash, salt) {
+    const { hash } = await hashPassword(password, salt);
     return hash === storedHash;
 }
 
 export const UserStore = {
-    init() {
-        const users = loadUsers();
-        // Ensure file permissions are secure (0600) on startup
-        if (fs.existsSync(USERS_FILE)) {
-            try { fs.chmodSync(USERS_FILE, 0o600); } catch (e) { }
+    async init() {
+        const users = await loadUsers();
+
+        if (existsSync(USERS_FILE)) {
+            try { await fs.chmod(USERS_FILE, 0o600); } catch (e) { }
         }
 
         if (Object.keys(users).length === 0) {
             console.log('--------------------------------------------------');
             console.log('No users found. Creating default admin user.');
-            console.log('Username: admin');
-            console.log('Password: admin');
+            console.log(`Username: ${DEFAULT_ADMIN.username}`);
+            console.log(`Password: ${DEFAULT_ADMIN.password}`);
             console.log('--------------------------------------------------');
-            this.createUser('admin', 'admin');
+            await this.createUser(DEFAULT_ADMIN.username, DEFAULT_ADMIN.password);
         }
     },
 
-    createUser(username, password) {
-        const users = loadUsers();
+    async createUser(username, password) {
+        const users = await loadUsers();
         if (users[username]) {
             throw new Error('User already exists');
         }
 
-        const { hash, salt } = hashPassword(password);
+        const { hash, salt } = await hashPassword(password);
         users[username] = {
             username,
             hash,
@@ -84,16 +100,17 @@ export const UserStore = {
             created_at: new Date().toISOString()
         };
 
-        return saveUsers(users);
+        return await saveUsers(users);
     },
 
-    authenticate(username, password) {
-        const users = loadUsers();
+    async authenticate(username, password) {
+        const users = await loadUsers();
         const user = users[username];
 
         if (!user) return null;
 
-        if (verifyPassword(password, user.hash, user.salt)) {
+        const isValid = await verifyPassword(password, user.hash, user.salt);
+        if (isValid) {
             const { hash, salt, ...safeUser } = user;
             return safeUser;
         }
@@ -101,17 +118,17 @@ export const UserStore = {
         return null;
     },
 
-    changePassword(username, newPassword) {
-        const users = loadUsers();
+    async changePassword(username, newPassword) {
+        const users = await loadUsers();
         if (!users[username]) {
             throw new Error('User not found');
         }
 
-        const { hash, salt } = hashPassword(newPassword);
+        const { hash, salt } = await hashPassword(newPassword);
         users[username].hash = hash;
         users[username].salt = salt;
         users[username].updated_at = new Date().toISOString();
 
-        return saveUsers(users);
+        return await saveUsers(users);
     }
 };

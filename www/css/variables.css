@@ -3,31 +3,18 @@
    ======================================== */
 :root {
     --bg-color: #f7f3ed;
-
     --card-bg: rgba(255, 255, 255, 0.6);
-
     --text-color: #2b2622;
-
     --title-color: #151311;
-
     --accent-color: #8b2c3b;
-
     --meta-color: #6e665c;
-
     --border-color: color-mix(in srgb, var(--bg-color), #000 4%);
-
     --hover-bg: rgba(255, 255, 255, 0.8);
-
     --card-shadow: 0 2px 4px rgba(0, 0, 0, 0.06), inset 0 1px 0 0 rgba(255, 255, 255, 1), inset 1px 0 0 0 rgba(255, 255, 255, 0.7);
-
     --card-shadow-hover: 0 3px 8px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 1), inset 1px 0 0 0 rgba(255, 255, 255, 0.8);
-
     --radius: 18px;
-
     --glass-blur: 16px;
-
     --danger-color: #c0392b;
-
 }
 
 /* ========================================

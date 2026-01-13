@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tidyflux-cache-v5.8';
+const CACHE_NAME = 'tidyflux-cache-v6.0';
 
 const URLS_TO_CACHE = [
   '/',
@@ -15,7 +15,6 @@ const URLS_TO_CACHE = [
   '/css/auth.css',
   '/api.js',
   '/js/main.js',
-  '/js/config.js',
   '/js/state.js',
   '/js/dom.js',
   '/js/modules/utils.js',

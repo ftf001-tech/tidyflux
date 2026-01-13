@@ -6,8 +6,6 @@
 import { AuthManager } from './auth-manager.js';
 import { i18n } from './i18n.js';
 
-
-
 export const FeedManager = {
     async getFeeds() {
         const response = await AuthManager.fetchWithAuth('/api/feeds');
@@ -115,27 +113,28 @@ export const FeedManager = {
         return data;
     },
 
-    async getArticles(page = 1, feedId = null, groupId = null, unreadOnly = true, favorites = false, cursor = null) {
-        let url = `/api/articles?page=${page}&limit=50&unread_only=${unreadOnly}`;
+    async getArticles({ page = 1, feedId = null, groupId = null, unreadOnly = true, favorites = false, cursor = null } = {}) {
+        const params = new URLSearchParams({
+            page: String(page),
+            limit: '50',
+            unread_only: String(unreadOnly)
+        });
 
-        // Use cursor pagination if provided
-        if (cursor && cursor.publishedAt && cursor.id) {
-            if (cursor.isAfter) {
-                url += `&after_published_at=${encodeURIComponent(cursor.publishedAt)}&after_id=${cursor.id}`;
-            } else {
-                url += `&before_published_at=${encodeURIComponent(cursor.publishedAt)}&before_id=${cursor.id}`;
-            }
+        // 使用游标分页
+        if (cursor?.publishedAt && cursor?.id) {
+            params.append(cursor.isAfter ? 'after_published_at' : 'before_published_at', cursor.publishedAt);
+            params.append(cursor.isAfter ? 'after_id' : 'before_id', cursor.id);
         }
 
         if (favorites) {
-            url += '&favorites=true';
+            params.append('favorites', 'true');
         } else if (feedId) {
-            url += `&feed_id=${feedId}`;
+            params.append('feed_id', feedId);
         } else if (groupId) {
-            url += `&group_id=${groupId}`;
+            params.append('group_id', groupId);
         }
 
-        const response = await AuthManager.fetchWithAuth(url);
+        const response = await AuthManager.fetchWithAuth(`/api/articles?${params.toString()}`);
 
         if (!response.ok) {
             throw new Error(i18n.t('feed.fetch_articles_failed'));
@@ -176,6 +175,47 @@ export const FeedManager = {
         }
 
         return response.ok;
+    },
+
+    /**
+     * Batch mark multiple articles as read (single API call)
+     * Falls back to individual calls if batch API fails
+     */
+    async markAsReadBatch(articleIds) {
+        if (!articleIds || articleIds.length === 0) return true;
+
+        // If only one, use single API
+        if (articleIds.length === 1) {
+            return this.markAsRead(articleIds[0]);
+        }
+
+        // Try batch API first
+        try {
+            const response = await AuthManager.fetchWithAuth('/api/articles/batch-read', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids: articleIds })
+            });
+
+            if (response.ok) {
+                return true;
+            }
+
+            // If batch API doesn't exist (404), fall back to parallel calls with limit
+            if (response.status === 404) {
+                const BATCH_SIZE = 10;
+                for (let i = 0; i < articleIds.length; i += BATCH_SIZE) {
+                    const batch = articleIds.slice(i, i + BATCH_SIZE);
+                    await Promise.all(batch.map(id => this.markAsRead(id)));
+                }
+                return true;
+            }
+
+            return false;
+        } catch (err) {
+            console.error('Batch mark as read failed:', err);
+            return false;
+        }
     },
 
     async markAllAsRead(feedId = null, groupId = null) {
@@ -306,8 +346,6 @@ export const FeedManager = {
             reader.onload = async (e) => {
                 try {
                     const xmlContent = e.target.result;
-                    const token = AuthManager.getToken(); // fetchWithAuth handles this, but here we need content-type xml
-                    // Using fetchWithAuth for OPML import might need adjustment because of content-type
                     const response = await AuthManager.fetchWithAuth('/api/feeds/opml/import', {
                         method: 'POST',
                         headers: {
@@ -368,9 +406,13 @@ export const FeedManager = {
 
     // Search articles
     async searchArticles(query, page = 1) {
-        const url = `/api/articles?page=${page}&limit=50&search=${encodeURIComponent(query)}`;
+        const params = new URLSearchParams({
+            page: String(page),
+            limit: '50',
+            search: query
+        });
 
-        const response = await AuthManager.fetchWithAuth(url);
+        const response = await AuthManager.fetchWithAuth(`/api/articles?${params.toString()}`);
 
         if (!response.ok) {
             throw new Error(i18n.t('feed.search_failed'));
@@ -389,7 +431,7 @@ export const FeedManager = {
         const response = await AuthManager.fetchWithAuth(`/api/digest/list?${params.toString()}`);
 
         if (!response.ok) {
-            throw new Error('获取简报列表失败');
+            throw new Error(i18n.t('digest.fetch_digests_failed'));
         }
 
         return response.json();
@@ -400,7 +442,7 @@ export const FeedManager = {
         const response = await AuthManager.fetchWithAuth(`/api/digest/${digestId}`);
 
         if (!response.ok) {
-            throw new Error('获取简报失败');
+            throw new Error(i18n.t('digest.fetch_digest_failed'));
         }
 
         return response.json();

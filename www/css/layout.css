@@ -478,47 +478,6 @@
     z-index: 2;
 }
 
-/* 文章内容区 */
-.article-content {
-    flex: 1;
-    overflow-y: auto;
-    padding: 10px 40px 24px;
-    max-width: 800px;
-    margin: 0 auto;
-    width: 100%;
-    box-sizing: border-box;
-    touch-action: pan-y;
-    /* iOS Safari 滚动优化 - 防止底部跳动 */
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-}
-
-.article-content .article-header h1 {
-    font-size: 1.6em;
-    line-height: 1.4;
-    margin: 0 0 16px 0;
-    font-family: 'Noto Serif SC', 'Songti SC', 'SimSun', 'FangSong', Georgia, serif;
-    font-weight: 700;
-    color: var(--title-color);
-}
-
-.article-content .article-body {
-    font-size: 1em;
-    line-height: 1.8;
-    color: var(--text-color);
-}
-
-.article-content .article-body p {
-    margin-bottom: 1em;
-}
-
-.article-content .article-body img {
-    max-width: 100%;
-    height: auto;
-    border-radius: var(--radius);
-    margin: 1em 0;
-}
-
 .empty-content {
     display: flex;
     align-items: center;
@@ -1408,6 +1367,12 @@ body.dialog-open #app-container {
     gap: 8px;
     border-radius: calc(var(--radius) - 4px);
     white-space: nowrap;
+}
+
+.context-menu-item svg {
+    width: 16px;
+    height: 16px;
+    flex-shrink: 0;
 }
 
 .context-menu-item:hover {

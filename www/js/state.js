@@ -3,43 +3,96 @@
  * @module state
  */
 
-export const AppState = {
-    // 用户状态
-    isLoggedIn: false,
-
-    // 订阅源列表
-    feeds: [],
-    groups: [],
-    currentFeedId: null,
-    currentGroupId: null,
-    viewingFavorites: false,
-    viewingDigests: false,
-    preferences: {},
-
-    // 文章列表
-    articles: [],
-    pagination: {
-        page: 1,
-        limit: 50,
-        total: 0,
-        totalPages: 1
+/**
+ * 应用全局状态对象
+ * 采用模块化组织，各部分状态职责明确
+ */
+const state = {
+    // 用户与鉴权状态
+    user: {
+        isLoggedIn: false,
+        preferences: {},
     },
-
-    // 过滤状态
-    showUnreadOnly: true,
-
-    // 当前文章
-    currentArticleId: null,
-
-    // UI 状态
-    lastVisitedArticleId: null,
-    lastListViewScrollTop: null,
-
+    // 导航与结构状态
+    navigation: {
+        feeds: [],
+        groups: [],
+        currentFeedId: null,
+        currentGroupId: null,
+        viewingFavorites: false,
+        viewingDigests: false,
+    },
+    // 内容与分页状态
+    content: {
+        articles: [],
+        pagination: {
+            page: 1,
+            limit: 50,
+            total: 0,
+            totalPages: 1
+        },
+        currentArticleId: null,
+    },
+    // 过滤与排序设置
+    filter: {
+        showUnreadOnly: true,
+    },
+    // UI 临时状态
+    ui: {
+        lastVisitedArticleId: null,
+        lastListViewScrollTop: null,
+    },
     // 搜索状态
-    isSearchMode: false,
-    searchQuery: '',
+    search: {
+        isSearchMode: false,
+        searchQuery: '',
+    },
+    // 内部观察者列表（不建议直接访问）
+    _observers: {
+        lazyLoad: null,
+    }
 };
 
-export const observers = {
-    lazyLoad: null,
+/**
+ * 兼容旧代码的 Proxy 访问器
+ * 将旧的扁平化访问请求转发到正确的模块路径
+ */
+const legacyMap = {
+    isLoggedIn: ['user', 'isLoggedIn'],
+    feeds: ['navigation', 'feeds'],
+    groups: ['navigation', 'groups'],
+    currentFeedId: ['navigation', 'currentFeedId'],
+    currentGroupId: ['navigation', 'currentGroupId'],
+    viewingFavorites: ['navigation', 'viewingFavorites'],
+    viewingDigests: ['navigation', 'viewingDigests'],
+    articles: ['content', 'articles'],
+    pagination: ['content', 'pagination'],
+    currentArticleId: ['content', 'currentArticleId'],
+    showUnreadOnly: ['filter', 'showUnreadOnly'],
+    isSearchMode: ['search', 'isSearchMode'],
+    searchQuery: ['search', 'searchQuery'],
+    preferences: ['user', 'preferences'],
+    lastListViewScrollTop: ['ui', 'lastListViewScrollTop']
 };
+
+export const AppState = state;
+
+// 初始化兼容性层
+Object.keys(legacyMap).forEach(key => {
+    const [module, property] = legacyMap[key];
+    Object.defineProperty(AppState, key, {
+        get: () => state[module][property],
+        set: (v) => state[module][property] = v,
+        enumerable: true,
+        configurable: true
+    });
+});
+
+/**
+ * 提供外部访问观察者的受限接口
+ */
+export const observers = {
+    get lazyLoad() { return state._observers.lazyLoad; },
+    set lazyLoad(val) { state._observers.lazyLoad = val; }
+};
+

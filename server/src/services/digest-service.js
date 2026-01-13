@@ -30,7 +30,7 @@ function truncateByToken(text, maxTokens) {
 }
 
 // 辅助函数：获取最近未读文章
-async function getRecentUnreadArticles(miniflux, options) {
+export async function getRecentUnreadArticles(miniflux, options) {
     const { hours = 12, limit, feedId, groupId } = options;
 
     const afterDate = new Date();
@@ -59,27 +59,51 @@ async function getRecentUnreadArticles(miniflux, options) {
     }
 }
 
-// 辅助函数：准备文章数据
-function prepareArticlesForDigest(articles) {
-    return articles.map((article, index) => {
-        // ... (原逻辑)
-        // 简化内容：去除 HTML 标签，截取长度
-        let content = article.content || '';
-        // 简单的去标签正则 (更健壮的方式是用 cheerio 或类似库，但这里保持简单)
-        content = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+// 辅助函数：准备文章数据 (异步分批处理，避免阻塞事件循环)
+async function prepareArticlesForDigest(articles) {
+    const BATCH_SIZE = 20; // 每一批处理 20 篇文章
+    const results = [];
+    const maxTokens = 1000;
 
-        // 限制每篇文章的摘要长度，目标 1000 Tokens
-        const maxTokens = 1000;
+    // 安全截断长度：在执行昂贵的正则去标签前，先截断过长的文本
+    const SAFE_CONTENT_LENGTH = 50000;
 
-        return {
-            index: index + 1,
-            title: article.title,
-            feedTitle: article.feed ? article.feed.title : '',
-            publishedAt: article.published_at,
-            summary: truncateByToken(content, maxTokens),
-            url: article.url
-        };
-    });
+    for (let i = 0; i < articles.length; i += BATCH_SIZE) {
+        const batch = articles.slice(i, i + BATCH_SIZE);
+
+        // 处理当前批次
+        const processedBatch = batch.map((article, batchIndex) => {
+            let content = article.content || '';
+
+            // 1. 预先截断：防止超大字符串导致后续正则卡死
+            if (content.length > SAFE_CONTENT_LENGTH) {
+                content = content.substring(0, SAFE_CONTENT_LENGTH);
+            }
+
+            // 2. 去除 HTML 标签 (简单的去标签正则)
+            // 替换所有标签为空格，替换连续空白为单个空格
+            content = content.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+
+            return {
+                index: i + batchIndex + 1,
+                title: article.title,
+                feedTitle: article.feed ? article.feed.title : '',
+                publishedAt: article.published_at,
+                summary: truncateByToken(content, maxTokens),
+                url: article.url
+            };
+        });
+
+        results.push(...processedBatch);
+
+        // 每处理完一批，让出事件循环 (yield to Event Loop)
+        // 使用 setImmediate 如果环境支持，否则用 setTimeout 0
+        if (i + BATCH_SIZE < articles.length) {
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    }
+
+    return results;
 }
 
 // 构建简报生成的 prompt
@@ -132,34 +156,50 @@ async function callAIForDigest(prompt, aiConfig) {
         throw new Error('AI 未配置，请先在设置中配置 AI API');
     }
 
-    let apiUrl = aiConfig.apiUrl.trim();
-    if (!apiUrl.endsWith('/')) apiUrl += '/';
-    if (!apiUrl.endsWith('chat/completions')) {
-        apiUrl += 'chat/completions';
+    const normalizeApiUrl = (url) => {
+        let normalized = url.trim();
+        if (!normalized.endsWith('/')) normalized += '/';
+        if (!normalized.endsWith('chat/completions')) {
+            normalized += 'chat/completions';
+        }
+        return normalized;
+    };
+
+    const apiUrl = normalizeApiUrl(aiConfig.apiUrl);
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => {
+        controller.abort();
+    }, 600000); // 10 minutes timeout
+
+    try {
+        const response = await fetch(apiUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${aiConfig.apiKey}`
+            },
+            body: JSON.stringify({
+                model: aiConfig.model || 'gpt-4.1-mini',
+                temperature: aiConfig.temperature ?? 1,
+                messages: [
+                    { role: 'user', content: prompt }
+                ],
+                stream: false
+            }),
+            signal: controller.signal
+        });
+
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            throw new Error(error.error?.message || `AI API 错误: ${response.status}`);
+        }
+
+        const data = await response.json();
+        return data.choices?.[0]?.message?.content || '';
+    } finally {
+        clearTimeout(timeout);
     }
-
-    const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${aiConfig.apiKey}`
-        },
-        body: JSON.stringify({
-            model: aiConfig.model || 'gpt-4.1-mini',
-            messages: [
-                { role: 'user', content: prompt }
-            ],
-            stream: false
-        })
-    });
-
-    if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(error.error?.message || `AI API 错误: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '';
 }
 
 export const DigestService = {
@@ -212,7 +252,7 @@ export const DigestService = {
         }
 
         // 准备文章数据
-        const preparedArticles = prepareArticlesForDigest(articles);
+        const preparedArticles = await prepareArticlesForDigest(articles);
 
         // 构建 prompt
         const prompt = buildDigestPrompt(preparedArticles, {
@@ -236,7 +276,7 @@ export const DigestService = {
         const title = `${scopeName} · ${digestWord} ${timeStr}`;
 
         // 存储简报
-        const saved = DigestStore.add(userId, {
+        const saved = await DigestStore.add(userId, {
             scope,
             scopeId,
             scopeName,

@@ -8,9 +8,11 @@ import { AppState } from '../../state.js';
 import { FeedManager } from '../feed-manager.js';
 import { setTheme, setColorScheme } from '../theme-manager.js';
 import { i18n } from '../i18n.js';
+import { Icons } from '../icons.js';
+import { API_ENDPOINTS } from '../../constants.js';
 
-const STORAGE_KEY_COLLAPSED = 'tinyflux_collapsed_groups';
-const STORAGE_KEY_PINNED = 'tinyflux_pinned_groups';
+const STORAGE_KEY_COLLAPSED = 'tidyflux_collapsed_groups';
+const STORAGE_KEY_PINNED = 'tidyflux_pinned_groups';
 
 /**
  * 订阅源视图管理
@@ -36,22 +38,28 @@ export const FeedsView = {
      */
     async fetchFeedsData() {
         try {
-            const [feeds, groups, prefs] = await Promise.all([
+            // Fetch feeds, groups, prefs, AND digests in parallel
+            // Wrap getDigests in a safe promise to prevent blocking main data if it fails
+            const safeGetDigests = async () => {
+                try {
+                    const res = await FeedManager.getDigests({ unreadOnly: true });
+                    return (res && res.digests) ? res.digests : { pinned: [], normal: [] };
+                } catch (e) {
+                    console.error('Failed to load digests count', e);
+                    return { pinned: [], normal: [] };
+                }
+            };
+
+            const [feeds, groups, prefs, digestsData] = await Promise.all([
                 FeedManager.getFeeds(),
                 FeedManager.getGroups(),
-                FeedManager.getPreferences()
+                FeedManager.getPreferences(),
+                safeGetDigests()
             ]);
 
             AppState.feeds = feeds;
             AppState.groups = groups;
             AppState.preferences = prefs || {};
-
-            // Fetch unread digests for count
-            let digestsData = { pinned: [], normal: [] };
-            try {
-                const res = await FeedManager.getDigests({ unreadOnly: true });
-                if (res && res.digests) digestsData = res.digests;
-            } catch (e) { console.error('Failed to load digests count', e); }
 
             // 应用主题设置
             if (AppState.preferences.theme) {
@@ -119,22 +127,16 @@ export const FeedsView = {
         // 固定项：全部文章和收藏
         let html = `
             <button class="feed-item-btn ${!AppState.currentFeedId && !AppState.viewingFavorites && !AppState.currentGroupId ? 'active' : ''}" data-feed-id="">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                    <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
-                </svg>
+                ${Icons.list}
                 <span class="feed-name">${i18n.t('nav.all')}</span>
                 ${totalUnread > 0 ? `<span class="feed-unread-count all-unread-count">${totalUnread}</span>` : ''}
             </button>
             <button class="feed-item-btn ${AppState.viewingFavorites ? 'active' : ''}" id="favorites-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                    <path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>
-                </svg>
+                ${Icons.star}
                 <span class="feed-name">${i18n.t('nav.starred')}</span>
             </button>
             <button class="feed-item-btn ${AppState.viewingDigests ? 'active' : ''}" id="digests-btn">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                     <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                </svg>
+                ${Icons.newspaper}
                 <span class="feed-name">${i18n.t('nav.briefings')}</span>
                 ${this._getDigestUnreadBadge(digestsData)}
             </button>
@@ -178,9 +180,7 @@ export const FeedsView = {
             groupsHtml += `
                 <div class="feed-group ${isCollapsed ? 'collapsed' : ''}" data-group-id="${g.id}">
                     <div class="feed-group-header">
-                        <svg class="fold-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16">
-                            <path d="M7 10l5 5 5-5z" fill="currentColor"/>
-                        </svg>
+                        ${Icons.chevron_down}
                         <span class="feed-group-name" data-group-id="${g.id}">${g.name}</span>
                         ${gUnread > 0 ? `<span class="feed-group-count">${gUnread}</span>` : ''}
                     </div>
@@ -205,6 +205,28 @@ export const FeedsView = {
     },
 
     /**
+     * 更新徽标计数辅助方法
+     * @param {HTMLElement} container - 容器元素
+     * @param {number} count - 计数
+     * @param {string} className - Badge 类名
+     * @param {string} selector - Badge 选择器
+     */
+    _updateBadge(container, count, className, selector = '.feed-unread-count') {
+        if (!container) return;
+        let badge = container.querySelector(selector);
+        if (count > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = className;
+                container.appendChild(badge);
+            }
+            badge.textContent = count;
+        } else if (badge) {
+            badge.remove();
+        }
+    },
+
+    /**
      * 仅更新未读计数（避免完全重新渲染）
      * @param {Array} feeds - 订阅源数组
      * @param {Array} groups - 分组数组
@@ -213,84 +235,42 @@ export const FeedsView = {
         // 更新全部文章计数
         const totalUnread = feeds.reduce((sum, f) => sum + (f.unread_count || 0), 0);
         const allBtn = DOMElements.feedsList.querySelector('.feed-item-btn[data-feed-id=""]');
-        if (allBtn) {
-            let badge = allBtn.querySelector('.feed-unread-count');
-            if (totalUnread > 0) {
-                if (!badge) {
-                    badge = document.createElement('span');
-                    badge.className = 'feed-unread-count all-unread-count';
-                    allBtn.appendChild(badge);
-                }
-                badge.textContent = totalUnread;
-            } else if (badge) {
-                badge.remove();
-            }
-        }
+        this._updateBadge(allBtn, totalUnread, 'feed-unread-count all-unread-count');
 
-        // 更新单个 Feed 计数
-        feeds.forEach(feed => {
-            const btn = DOMElements.feedsList.querySelector(`.feed-item-btn[data-feed-id="${feed.id}"]`);
-            if (btn) {
-                let badge = btn.querySelector('.feed-unread-count');
-                if (feed.unread_count > 0) {
-                    if (!badge) {
-                        badge = document.createElement('span');
-                        badge.className = 'feed-unread-count';
-                        btn.appendChild(badge);
-                    }
-                    badge.textContent = feed.unread_count;
-                } else if (badge) {
-                    badge.remove();
-                }
-            }
-        });
+        // 优化：一次性建立映射，避免在循环中重复查询 DOM
+        const feedUnreadMap = new Map(feeds.map(f => [String(f.id), f.unread_count || 0]));
+        const groupUnreadMap = new Map();
 
-        // 更新分组计数
-        const feedsByGroup = {};
+        // 计算分组未读数
         feeds.forEach(f => {
             if (f.group_id) {
-                if (!feedsByGroup[f.group_id]) feedsByGroup[f.group_id] = [];
-                feedsByGroup[f.group_id].push(f);
+                const gid = String(f.group_id);
+                groupUnreadMap.set(gid, (groupUnreadMap.get(gid) || 0) + (f.unread_count || 0));
             }
         });
 
-        groups.forEach(g => {
-            const gFeeds = feedsByGroup[g.id] || [];
-            const gUnread = gFeeds.reduce((sum, f) => sum + (f.unread_count || 0), 0);
-            const groupHeader = DOMElements.feedsList.querySelector(`.feed-group[data-group-id="${g.id}"] .feed-group-header`);
+        // 遍历 DOM 更新徽标 (O(N) 复杂度)
+        DOMElements.feedsList.querySelectorAll('.feed-item-btn[data-feed-id]').forEach(btn => {
+            const feedId = btn.dataset.feedId;
+            // 跳过 "全部" 按钮 (feedId 为空字符串)
+            if (feedId === "") return;
 
-            if (groupHeader) {
-                let badge = groupHeader.querySelector('.feed-group-count');
-                if (gUnread > 0) {
-                    if (!badge) {
-                        badge = document.createElement('span');
-                        badge.className = 'feed-group-count';
-                        groupHeader.appendChild(badge);
-                    }
-                    badge.textContent = gUnread;
-                } else if (badge) {
-                    badge.remove();
-                }
-            }
+            const count = feedUnreadMap.get(feedId) || 0;
+            this._updateBadge(btn, count, 'feed-unread-count');
+        });
+
+        DOMElements.feedsList.querySelectorAll('.feed-group').forEach(groupEl => {
+            const groupId = groupEl.dataset.groupId;
+            const count = groupUnreadMap.get(groupId) || 0;
+            const groupHeader = groupEl.querySelector('.feed-group-header');
+            this._updateBadge(groupHeader, count, 'feed-group-count', '.feed-group-count');
         });
 
         // Update Briefings Count
         if (digestsData) {
             const btn = document.getElementById('digests-btn');
-            if (btn) {
-                let badge = btn.querySelector('.feed-unread-count');
-                const count = (digestsData.pinned?.length || 0) + (digestsData.normal?.length || 0);
-                if (count > 0) {
-                    if (!badge) {
-                        badge = document.createElement('span');
-                        badge.className = 'feed-unread-count digests-unread-count';
-                        btn.appendChild(badge);
-                    }
-                    badge.textContent = count;
-                } else if (badge) {
-                    badge.remove();
-                }
-            }
+            const count = (digestsData.pinned?.length || 0) + (digestsData.normal?.length || 0);
+            this._updateBadge(btn, count, 'feed-unread-count digests-unread-count');
         }
     },
 
@@ -303,7 +283,7 @@ export const FeedsView = {
         const unread = feed.unread_count || 0;
         return `
             <button class="feed-item-btn ${AppState.currentFeedId === feed.id ? 'active' : ''}" data-feed-id="${feed.id}">
-                <img class="feed-icon" src="/api/favicon?feedId=${feed.id}&v=1" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/icons/rss.svg';" alt="">
+                <img class="feed-icon" src="${API_ENDPOINTS.FAVICON.BASE}?feedId=${feed.id}&v=1" loading="lazy" decoding="async" alt="">
                 <span class="feed-name">${feed.title || i18n.t('common.unnamed')}</span>
                 ${unread > 0 ? `<span class="feed-unread-count">${unread}</span>` : ''}
             </button>
@@ -315,6 +295,15 @@ export const FeedsView = {
      */
     bindFeedsListEvents() {
         const vm = this.viewManager;
+        const listEl = DOMElements.feedsList;
+
+        // Favicon 加载失败回退（使用 capture 捕获 error 事件）
+        listEl.addEventListener('error', (e) => {
+            if (e.target.tagName === 'IMG' && e.target.classList.contains('feed-icon')) {
+                e.target.src = '/icons/rss.svg';
+                e.target.onerror = null; // Prevent infinite loop if fallback also fails
+            }
+        }, true);
 
         // 收藏按钮
         const favBtn = document.getElementById('favorites-btn');
@@ -516,9 +505,9 @@ export const FeedsView = {
      * @param {Object} options - 选项
      */
     updateSidebarActiveState(options) {
-        // 清除所有激活状态
-        DOMElements.feedsList.querySelectorAll('.feed-item-btn').forEach(btn => btn.classList.remove('active'));
-        DOMElements.feedsList.querySelectorAll('.feed-group-name').forEach(name => name.classList.remove('active'));
+        // 清除所有激活状态 (优化：只查找当前激活的元素)
+        const currentActive = DOMElements.feedsList.querySelector('.active');
+        if (currentActive) currentActive.classList.remove('active');
 
         if (options?.favorites) {
             const favBtn = document.getElementById('favorites-btn');

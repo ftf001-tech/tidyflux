@@ -11,6 +11,8 @@ import { showToast } from './utils.js';
 import { Modal } from './components.js';
 import { AIService } from '../ai-service.js';
 import { i18n } from '../i18n.js';
+import { Icons } from '../icons.js';
+import { ArticlesView } from './articles-view.js';
 
 /**
  * 文章内容视图管理
@@ -25,6 +27,16 @@ export const ArticleContentView = {
      */
     init(viewManager) {
         this.viewManager = viewManager;
+
+        // Add global error handler for images within article content (Delegate)
+        if (DOMElements.articleContent) {
+            DOMElements.articleContent.addEventListener('error', (e) => {
+                if (e.target.tagName === 'IMG' && e.target.classList.contains('favicon')) {
+                    e.target.src = '/icons/rss.svg';
+                    e.target.onerror = null;
+                }
+            }, true); // Capture phase
+        }
     },
 
     /**
@@ -141,15 +153,22 @@ export const ArticleContentView = {
         const wasUnread = cachedArticle && !cachedArticle.is_read;
         const feedId = cachedArticle?.feed_id;
 
-        if (vm.useVirtualScroll && vm.virtualList) {
-            vm.virtualList.updateActiveItem(articleId);
-            vm.virtualList.updateItem(articleId, { is_read: 1 });
+        // Use ArticlesView's virtual list directly to avoid stale references (fixes search mode issue)
+        if (ArticlesView.useVirtualScroll && ArticlesView.virtualList) {
+            ArticlesView.virtualList.updateActiveItem(articleId);
+            ArticlesView.virtualList.updateItem(articleId, { is_read: 1 });
+            // Sync vm references
+            vm.virtualList = ArticlesView.virtualList;
+            vm.useVirtualScroll = ArticlesView.useVirtualScroll;
         } else {
-            DOMElements.articlesList?.querySelectorAll('.article-item').forEach(item => {
-                const isActive = item.dataset.id == articleId;
-                item.classList.toggle('active', isActive);
-                if (isActive) item.classList.remove('unread');
-            });
+            const prevActive = DOMElements.articlesList?.querySelector('.article-item.active');
+            if (prevActive) prevActive.classList.remove('active');
+
+            const newActive = DOMElements.articlesList?.querySelector(`.article-item[data-id="${articleId}"]`);
+            if (newActive) {
+                newActive.classList.add('active');
+                newActive.classList.remove('unread');
+            }
         }
 
         // 更新未读计数（仅普通文章）
@@ -159,7 +178,7 @@ export const ArticleContentView = {
         }
 
         // 显示加载状态
-        DOMElements.articleContent.innerHTML = '<div class="loading" style="padding: 40px; text-align: center;">加载中...</div>';
+        DOMElements.articleContent.innerHTML = `<div class="loading" style="padding: 40px; text-align: center;">${i18n.t('common.loading')}</div>`;
         DOMElements.articleContent.scrollTop = 0;
 
         if (window.innerWidth <= 1100) {
@@ -204,7 +223,7 @@ export const ArticleContentView = {
             }
         } catch (err) {
             console.error('Load article error:', err);
-            DOMElements.articleContent.innerHTML = '<div class="error-msg" style="padding: 40px; text-align: center; color: red;">加载失败</div>';
+            DOMElements.articleContent.innerHTML = `<div class="error-msg" style="padding: 40px; text-align: center; color: red;">${i18n.t('common.load_error')}</div>`;
         }
     },
 
@@ -220,9 +239,7 @@ export const ArticleContentView = {
             <div class="article-toolbar">
                 <div class="article-toolbar-left">
                     <button class="article-toolbar-btn" id="article-back-btn" title="返回列表">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
+                        ${Icons.arrow_back}
                     </button>
                 </div>
 
@@ -303,15 +320,16 @@ export const ArticleContentView = {
     renderArticleContent(article) {
         // document.title = article.title || 'Tidyflux';
 
+        const locale = AppState.user.language || 'zh-CN';
         const date = article.published_at
-            ? new Date(article.published_at).toLocaleString('zh-CN')
+            ? new Date(article.published_at).toLocaleString(locale)
             : '';
         const content = article.content || article.summary || '<p>内容为空</p>';
 
         // 构建 feed icon 或 feed 名称
         let feedInfo = '';
         if (article.feed_id) {
-            feedInfo = `<img src="/api/favicon?feedId=${article.feed_id}" class="favicon" loading="lazy" decoding="async" onerror="this.onerror=null;this.src='/icons/rss.svg';" alt="${article.feed_title || ''}" title="${article.feed_title || ''}" style="width: 14px; height: 14px; border-radius: 4px; margin: 0; display: block;">`;
+            feedInfo = `<img src="/api/favicon?feedId=${article.feed_id}" class="favicon" loading="lazy" decoding="async" alt="${article.feed_title || ''}" title="${article.feed_title || ''}" style="width: 14px; height: 14px; border-radius: 4px; margin: 0; display: block;">`;
         }
         if (!feedInfo && article.feed_title) {
             feedInfo = `<span style="font-weight: 500;">${article.feed_title}</span>`;
@@ -325,7 +343,7 @@ export const ArticleContentView = {
 
         // 可点击的标题
         const titleHTML = article.url
-            ? `<h1><a href="${article.url}" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: none; cursor: pointer;" onmouseover="this.style.color='var(--accent-color)'" onmouseout="this.style.color='inherit'">${article.title}</a></h1>`
+            ? `<h1><a href="${article.url}" target="_blank" rel="noopener noreferrer" class="article-title-link">${article.title}</a></h1>`
             : `<h1>${article.title}</h1>`;
 
         const isFavorited = article.is_favorited;
@@ -335,42 +353,26 @@ export const ArticleContentView = {
         const toolbarHTML = `
             <div class="article-toolbar">
                 <div class="article-toolbar-left">
-                    <button class="article-toolbar-btn" id="article-back-btn" title="返回列表">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                        </svg>
+                    <button class="article-toolbar-btn" id="article-back-btn" title="${i18n.t('common.close')}">
+                        ${Icons.arrow_back}
                     </button>
                 </div>
                 <div class="article-toolbar-right">
-                   <button class="article-toolbar-btn ${isRead ? 'is-read' : 'active'}" id="article-toggle-read-btn" title="${isRead ? '标记为未读' : '标记为已读'}">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            ${isRead
-                ? '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>'
-                : '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/>'}
-                        </svg>
+                   <button class="article-toolbar-btn ${isRead ? 'is-read' : 'active'}" id="article-toggle-read-btn" title="${isRead ? i18n.t('article.mark_unread') : i18n.t('article.mark_read')}">
+                        ${isRead ? Icons.mark_read : Icons.mark_unread}
                     </button>
-                    <button class="article-toolbar-btn ${isFavorited ? 'active' : ''}" id="article-toggle-fav-btn" title="${isFavorited ? '取消收藏' : '收藏'}">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            ${isFavorited
-                ? '<path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/>'
-                : '<path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.64-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.01 4.38.38-3.32 2.88 1 4.28L12 15.4z"/>'}
-                        </svg>
+                    <button class="article-toolbar-btn ${isFavorited ? 'active' : ''}" id="article-toggle-fav-btn" title="${isFavorited ? i18n.t('article.unstar') : i18n.t('article.star')}">
+                        ${isFavorited ? Icons.star : Icons.star_border}
                     </button>
-                    <button class="article-toolbar-btn" id="article-fetch-content-btn" title="获取全文">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
-                        </svg>
+                    <button class="article-toolbar-btn" id="article-fetch-content-btn" title="${i18n.t('feed.fetch_content_failed').replace('Failed to fetch', 'Fetch')}">
+                        ${Icons.fetch_original}
                     </button>
                     <div class="toolbar-divider" style="width: 1px; height: 16px; background: var(--border-color); margin: 0 4px;"></div>
                     <button class="article-toolbar-btn" id="article-translate-btn" title="${i18n.t('ai.translate_btn')}">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
-                        </svg>
+                        ${Icons.translate}
                     </button>
                     <button class="article-toolbar-btn" id="article-summarize-btn" title="${i18n.t('ai.summarize_btn')}">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M12 2L14.85 9.15L22 12L14.85 14.85L12 22L9.15 14.85L2 12L9.15 9.15L12 2Z"/>
-                        </svg>
+                        ${Icons.summarize}
                     </button>
                 </div>
             </div>
@@ -406,6 +408,7 @@ export const ArticleContentView = {
             </div>
         `;
 
+        this.enhanceCodeBlocks();
         this.bindArticleToolbarEvents(article);
     },
 
@@ -454,8 +457,8 @@ export const ArticleContentView = {
                         article.is_read = 0;
                         btn.classList.remove('is-read');
                         btn.classList.add('active');
-                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8z"/></svg>';
-                        btn.title = '标记为已读';
+                        btn.innerHTML = Icons.mark_unread;
+                        btn.title = i18n.t('article.mark_read');
 
                         // 增加未读计数
                         this.updateLocalUnreadCount(article.feed_id, 1);
@@ -464,8 +467,8 @@ export const ArticleContentView = {
                         article.is_read = 1;
                         btn.classList.add('is-read');
                         btn.classList.remove('active');
-                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>';
-                        btn.title = '标记为未读';
+                        btn.innerHTML = Icons.mark_read;
+                        btn.title = i18n.t('article.mark_unread');
                         this.updateLocalUnreadCount(article.feed_id);
                     }
 
@@ -488,14 +491,14 @@ export const ArticleContentView = {
                         await FeedManager.unfavoriteArticle(article.id);
                         article.is_favorited = 0;
                         btn.classList.remove('active');
-                        btn.title = '收藏';
-                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21 12 17.27 18.18 21l-1.64-7.03L22 9.24zM12 15.4l-3.76 2.27 1-4.28-3.32-2.88 4.38-.38L12 6.1l1.71 4.01 4.38.38-3.32 2.88 1 4.28L12 15.4z"/></svg>';
+                        btn.title = i18n.t('article.star');
+                        btn.innerHTML = Icons.star_border;
                     } else {
                         await FeedManager.favoriteArticle(article.id);
                         article.is_favorited = 1;
                         btn.classList.add('active');
-                        btn.title = '取消收藏';
-                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg>';
+                        btn.title = i18n.t('article.unstar');
+                        btn.innerHTML = Icons.star;
                     }
 
                     // 更新列表中的收藏星标
@@ -521,7 +524,7 @@ export const ArticleContentView = {
         if (fetchBtn) {
             // 如果已有原始内容缓存，更新按钮状态
             if (article._originalContent) {
-                fetchBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>';
+                fetchBtn.innerHTML = Icons.restore_original;
                 fetchBtn.title = '恢复原文';
                 fetchBtn.classList.add('active');
             }
@@ -551,7 +554,7 @@ export const ArticleContentView = {
                     if (stateArticle) stateArticle.content = article._originalContent;
 
                     delete article._originalContent;
-                    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>';
+                    fetchBtn.innerHTML = Icons.fetch_original;
                     btn.classList.remove('active');
                     btn.title = '获取全文';
                     return;
@@ -559,7 +562,7 @@ export const ArticleContentView = {
 
                 // 开始获取全文
                 const originalHtml = btn.innerHTML;
-                btn.innerHTML = '<svg class="spinner" viewBox="0 0 50 50" style="width:20px;height:20px;animation:rotate 2s linear infinite;"><circle cx="25" cy="25" r="20" fill="none" stroke="currentColor" stroke-width="5"></circle></svg>';
+                btn.innerHTML = Icons.spinner;
                 btn.classList.add('loading');
 
                 // 添加旋转动画样式
@@ -585,17 +588,17 @@ export const ArticleContentView = {
                     if (stateArticle) stateArticle.content = result.content;
 
                     // 显示成功状态
-                    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="color: var(--accent-color);"><path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/></svg>';
+                    btn.innerHTML = Icons.success;
 
                     setTimeout(() => {
-                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></svg>';
+                        btn.innerHTML = Icons.restore_original;
                         btn.title = '恢复原文';
                         btn.classList.add('active');
                         btn.classList.remove('loading');
                     }, 1000);
                 } catch (err) {
                     console.error('Fetch content failed', err);
-                    btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20" style="color: #ff4444;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+                    btn.innerHTML = Icons.error;
                     btn.dataset.errorState = 'true';
                     btn.dataset.originalHtml = originalHtml;
                     btn.errorTimeout = setTimeout(() => {
@@ -637,20 +640,21 @@ export const ArticleContentView = {
         text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
 
         // 分隔线
-        text = text.replace(/^---+$/gim, '<hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">');
+        // text = text.replace(/^---+$/gim, '<hr style="border: 0; border-top: 1px solid var(--border-color); margin: 24px 0;">');
+        text = text.replace(/^---+$/gim, '<hr class="md-hr">');
 
         // 4. 标题 (更紧凑)
-        text = text.replace(/^#### (.*$)/gim, '<div style="font-weight:700; font-size:1em; margin:10px 0 4px; color:var(--title-color);">$1</div>');
-        text = text.replace(/^### (.*$)/gim, '<div style="font-weight:700; margin:10px 0 4px; color:var(--title-color);">$1</div>');
-        text = text.replace(/^## (.*$)/gim, '<div style="font-weight:700; font-size:1.05em; margin:12px 0 6px; color:var(--title-color);">$1</div>');
-        text = text.replace(/^# (.*$)/gim, '<div style="font-weight:700; font-size:1.1em; margin:14px 0 8px; color:var(--title-color);">$1</div>');
+        text = text.replace(/^#### (.*$)/gim, '<div class="md-h4">$1</div>');
+        text = text.replace(/^### (.*$)/gim, '<div class="md-h3">$1</div>');
+        text = text.replace(/^## (.*$)/gim, '<div class="md-h2">$1</div>');
+        text = text.replace(/^# (.*$)/gim, '<div class="md-h1">$1</div>');
 
         // 5. 列表项 (使用 Flex 布局对齐，更紧凑)
-        text = text.replace(/^\s*[-*]\s+(.*$)/gim, '<div style="display:flex; align-items:baseline; margin-bottom:4px;"><span style="flex-shrink:0; width:14px; color:var(--accent-color);">•</span><span style="flex:1;">$1</span></div>');
+        text = text.replace(/^\s*[-*]\s+(.*$)/gim, '<div class="md-list-item"><span class="md-list-bullet">•</span><span class="md-list-content">$1</span></div>');
 
         // 6. 换行处理
         // 两个以上换行 -> 段间距 (8px)
-        text = text.replace(/\n\s*\n/g, '<div style="height:8px;"></div>');
+        text = text.replace(/\n\s*\n/g, '<div class="md-gap"></div>');
 
         // 闭合标签后的换行 -> 移除 (避免 div 后再跟 br)
         text = text.replace(/>\s*\n/g, '>');
@@ -796,8 +800,7 @@ export const ArticleContentView = {
                 transEl.style.marginBottom = '20px';
                 transEl.style.padding = '8px 12px';
                 transEl.style.background = 'color-mix(in srgb, var(--accent-color), transparent 96%)';
-                transEl.style.borderLeft = '3px solid var(--accent-color)';
-                transEl.style.borderRadius = '0 var(--radius) var(--radius) 0';
+                transEl.style.borderRadius = 'var(--radius)';
                 transEl.innerHTML = `<span style="opacity:0.6; font-size: 0.9em;">... ${i18n.t('ai.translating')} ...</span>`;
 
                 if (block.el.nodeType === Node.ELEMENT_NODE) {
@@ -821,7 +824,7 @@ export const ArticleContentView = {
 
                 try {
                     const aiConfig = AIService.getConfig();
-                    const targetLang = aiConfig.targetLang || 'zh-CN';
+                    const targetLang = aiConfig.targetLang || (i18n.locale === 'zh' ? 'zh-CN' : 'en');
                     const translation = await AIService.translate(block.text, targetLang, signal);
                     if (signal?.aborted) return;
                     block.transEl.innerHTML = this.parseMarkdown(translation);
@@ -901,7 +904,7 @@ export const ArticleContentView = {
 
                     // 获取配置的目标语言
                     const aiConfig = AIService.getConfig();
-                    const targetLang = aiConfig.targetLang || 'zh-CN';
+                    const targetLang = aiConfig.targetLang || (i18n.locale === 'zh' ? 'zh-CN' : 'en');
 
                     let streamedText = '';
                     await AIService.summarize(rawContent, targetLang, (chunk) => {
@@ -1008,6 +1011,108 @@ export const ArticleContentView = {
                 }
             });
         }
+    },
+
+    /**
+     * 增强代码块显示
+     * 为 pre 和 code 块添加语言标签和复制按钮
+     */
+    enhanceCodeBlocks() {
+        const articleBody = DOMElements.articleContent?.querySelector('.article-body');
+        if (!articleBody) return;
+
+        const preElements = articleBody.querySelectorAll('pre');
+
+        preElements.forEach((pre) => {
+            // 避免重复处理
+            if (pre.parentElement?.classList.contains('code-block-wrapper')) return;
+
+            // 获取语言类型
+            let language = 'text';
+            const codeEl = pre.querySelector('code');
+            if (codeEl) {
+                const className = codeEl.className || '';
+                const match = className.match(/(?:language-|lang-)(\w+)/);
+                if (match) {
+                    language = match[1];
+                }
+            }
+
+            // 获取代码内容（清理多余换行）
+            const getTextContent = (node) => {
+                if (!node) return '';
+                if (node.nodeType === Node.TEXT_NODE) return node.data;
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    if (node.tagName === 'BR') return '\n';
+                    return Array.from(node.childNodes).map(getTextContent).join('');
+                }
+                return '';
+            };
+
+            const codeText = getTextContent(codeEl || pre)
+                .replace(/\n{3,}/g, '\n\n')
+                .trim();
+
+            // 创建包装器
+            const wrapper = document.createElement('div');
+            wrapper.className = 'code-block-wrapper';
+
+            // 创建头部
+            const header = document.createElement('div');
+            header.className = 'code-block-header';
+            header.innerHTML = `
+                <span class="code-language">${language.toUpperCase()}</span>
+                <button class="code-copy-btn" title="${i18n.t('ai.copy')}">
+                    ${Icons.copy}
+                    <span class="copy-text">${i18n.t('ai.copy')}</span>
+                </button>
+            `;
+
+            // 复制功能 (兼容 iOS Safari)
+            const copyBtn = header.querySelector('.code-copy-btn');
+            copyBtn.addEventListener('click', async () => {
+                const showSuccess = () => {
+                    copyBtn.innerHTML = `${Icons.copied}<span class="copy-text">${i18n.t('ai.copied')}</span>`;
+                    copyBtn.classList.add('copied');
+                    setTimeout(() => {
+                        copyBtn.innerHTML = `${Icons.copy}<span class="copy-text">${i18n.t('ai.copy')}</span>`;
+                        copyBtn.classList.remove('copied');
+                    }, 2000);
+                };
+
+                // 优先使用现代 Clipboard API
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(codeText);
+                        showSuccess();
+                        return;
+                    } catch (err) {
+                        // Fallback to execCommand
+                    }
+                }
+
+                // Fallback: 使用 textarea + execCommand (兼容 iOS Safari)
+                try {
+                    const textarea = document.createElement('textarea');
+                    textarea.value = codeText;
+                    textarea.style.cssText = 'position:fixed;left:-9999px;top:0;opacity:0;';
+                    document.body.appendChild(textarea);
+                    textarea.focus();
+                    textarea.select();
+                    textarea.setSelectionRange(0, codeText.length); // iOS 需要这行
+                    document.execCommand('copy');
+                    document.body.removeChild(textarea);
+                    showSuccess();
+                } catch (err) {
+                    console.error('Copy failed:', err);
+                }
+            });
+
+            // 包装 pre 元素
+            pre.parentNode.insertBefore(wrapper, pre);
+            wrapper.appendChild(header);
+            wrapper.appendChild(pre);
+        });
     },
 
     /**

@@ -64,22 +64,11 @@
 }
 
 /* 强制暗色模式下的元素样式 */
-
-
-
-
-
 [data-color-scheme="dark"] .article-content blockquote {
     color: var(--meta-color);
     background-color: color-mix(in srgb, var(--accent-color), transparent 92%);
     border-left-color: var(--accent-color);
 }
-
-
-
-
-
-
 
 [data-color-scheme="dark"] .search-dialog-content,
 [data-color-scheme="dark"] .add-feed-dialog-content,

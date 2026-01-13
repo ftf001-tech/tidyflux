@@ -7,11 +7,24 @@ import { DOMElements } from '../../dom.js';
 import { AppState } from '../../state.js';
 
 /**
+ * 手势判定常量配置
+ */
+const GESTURE_CONFIG = {
+    SWIPE_THRESHOLD: 50,      // 最小滑动距离判定
+    EDGE_SIZE: 25,            // 边缘判定范围 (px)
+    VELOCITY_THRESHOLD: 0.3,  // 最小爆发速度 (px/ms)
+    MOVEMENT_THRESHOLD: 10,   // 开始滑动判定阈值
+    QUICK_SWIPE_MIN: 20       // 结合速度判定的最小距离
+};
+
+/**
  * 手势处理模块
  */
 export const Gestures = {
     /** 视图管理器引用 */
     viewManager: null,
+    /** 是否正从边缘滑动 */
+    isFromLeftEdge: false,
 
     /**
      * 初始化模块
@@ -57,10 +70,13 @@ export const Gestures = {
 
         // 移除 no-transition 类（如果之前添加的话）
         if (!isProgrammatic) {
-            // 强制重排以应用无动画状态
-            void panels.feeds?.offsetWidth;
-            Object.values(panels).forEach(p => {
-                if (p) p.classList.remove('no-transition');
+            // 使用 requestAnimationFrame 避免强制同步重排 (Forced Reflow)
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => {
+                    Object.values(panels).forEach(p => {
+                        if (p) p.classList.remove('no-transition');
+                    });
+                });
             });
         }
 
@@ -115,11 +131,6 @@ export const Gestures = {
         let isHorizontalSwipe = false;
         let startPanel = null;
         let swipeTarget = null;
-
-        const SWIPE_THRESHOLD = 50;
-        const EDGE_SIZE = 25;
-        const VELOCITY_THRESHOLD = 0.3;
-
         let startTime = 0;
 
         const getActivePanel = () => {
@@ -140,10 +151,17 @@ export const Gestures = {
             isHorizontalSwipe = false;
             startPanel = getActivePanel();
             swipeTarget = e.target;
-            this.isFromLeftEdge = startX < EDGE_SIZE;
+            this.isFromLeftEdge = startX < GESTURE_CONFIG.EDGE_SIZE;
+
+            // 检查是否在代码块内
+            if (swipeTarget.closest('.code-block-wrapper') || swipeTarget.closest('pre')) {
+                startX = 0;
+                return;
+            }
 
             // 检查是否在可水平滚动的容器内
             if (this.isInHorizontalScrollableContainer(swipeTarget)) {
+                startX = 0;
                 return;
             }
         };
@@ -156,7 +174,7 @@ export const Gestures = {
             const diffY = touch.clientY - startY;
 
             // 确定是水平还是垂直滑动
-            if (!isSwiping && (Math.abs(diffX) > 10 || Math.abs(diffY) > 10)) {
+            if (!isSwiping && (Math.abs(diffX) > GESTURE_CONFIG.MOVEMENT_THRESHOLD || Math.abs(diffY) > GESTURE_CONFIG.MOVEMENT_THRESHOLD)) {
                 isSwiping = true;
                 isHorizontalSwipe = Math.abs(diffX) > Math.abs(diffY);
 
@@ -192,71 +210,51 @@ export const Gestures = {
             const elapsed = Date.now() - startTime;
             const velocity = Math.abs(diffX) / elapsed;
 
-            const isSwipeRight = diffX > SWIPE_THRESHOLD || (diffX > 20 && velocity > VELOCITY_THRESHOLD);
-            const isSwipeLeft = diffX < -SWIPE_THRESHOLD || (diffX < -20 && velocity > VELOCITY_THRESHOLD);
+            const isSwipeRight = diffX > GESTURE_CONFIG.SWIPE_THRESHOLD || (diffX > GESTURE_CONFIG.QUICK_SWIPE_MIN && velocity > GESTURE_CONFIG.VELOCITY_THRESHOLD);
+            const isSwipeLeft = diffX < -GESTURE_CONFIG.SWIPE_THRESHOLD || (diffX < -GESTURE_CONFIG.QUICK_SWIPE_MIN && velocity > GESTURE_CONFIG.VELOCITY_THRESHOLD);
 
-            const isFromLeftEdge = startX < EDGE_SIZE;
-            const isFromRightEdge = startX > window.innerWidth - EDGE_SIZE;
+            const isFromLeftEdge = startX < GESTURE_CONFIG.EDGE_SIZE;
+            const isFromRightEdge = startX > window.innerWidth - GESTURE_CONFIG.EDGE_SIZE;
 
             if (startPanel === 'content') {
-                // 内容页右滑返回：
-                // 1. 边缘滑动：放行不处理，让浏览器执行原生返回 (触发 router)
-                // 2. 中间滑动：执行手动返回
+                // 内容页右滑返回
                 if (!isFromLeftEdge && isSwipeRight) {
-                    if (this.viewManager) this.viewManager.isProgrammaticNav = true;
-                    // Removed: this.showPanel('articles'); (Let Router handle it)
-
-                    // 同步 URL
                     if (this.viewManager) {
                         this.viewManager.isProgrammaticNav = true;
                         history.back();
                     }
 
                     // 恢复滚动位置
-                    if (AppState.lastListViewScrollTop !== null) {
+                    if (AppState.ui.lastListViewScrollTop !== null) {
                         if (vm.useVirtualScroll && vm.virtualList) {
-                            vm.virtualList.setScrollTop(AppState.lastListViewScrollTop);
+                            vm.virtualList.setScrollTop(AppState.ui.lastListViewScrollTop);
                         } else if (DOMElements.articlesList) {
-                            DOMElements.articlesList.scrollTop = AppState.lastListViewScrollTop;
+                            DOMElements.articlesList.scrollTop = AppState.ui.lastListViewScrollTop;
                         }
                     }
                 }
             } else if (startPanel === 'articles') {
                 if ((isFromLeftEdge && isSwipeRight) || isSwipeRight) {
-                    // 保存当前列表滚动位置，以便从 feeds 返回时恢复
+                    // 保存当前列表滚动位置
                     if (DOMElements.articlesList) {
-                        if (vm && vm.useVirtualScroll && vm.virtualList) {
-                            AppState.lastListViewScrollTop = vm.virtualList.getScrollTop();
+                        if (vm?.useVirtualScroll && vm.virtualList) {
+                            AppState.ui.lastListViewScrollTop = vm.virtualList.getScrollTop();
                         } else {
-                            AppState.lastListViewScrollTop = DOMElements.articlesList.scrollTop;
+                            AppState.ui.lastListViewScrollTop = DOMElements.articlesList.scrollTop;
                         }
                     }
 
                     // 返回订阅源列表
-                    // 如果可以通过 history.back() 回到 feeds 列表则回退，否则 explicit navigate
-                    // 由于我们现在有了明确的 #/feeds 路由
-                    // 如果当前就是 #/all (文章列表)，去 #/feeds
                     if (this.viewManager) this.viewManager.isProgrammaticNav = true;
                     window.location.hash = '#/feeds';
                 } else if ((isFromRightEdge && isSwipeLeft) || isSwipeLeft) {
-                    // 如果有当前文章，进入内容页
-                    // 使用 selectArticle 而不是单纯 showPanel，以确保 URL 同步更新
-                    // 这样再次右滑返回时，history.back() 才能正确返回列表页
-                    if (AppState.currentArticleId) {
-                        if (this.viewManager && this.viewManager.selectArticle) {
-                            this.viewManager.selectArticle(AppState.currentArticleId);
-                        } else {
-                            this.showPanel('content');
-                        }
+                    // 进入内容页
+                    if (AppState.content.currentArticleId && this.viewManager?.selectArticle) {
+                        this.viewManager.selectArticle(AppState.content.currentArticleId);
                     }
                 }
             } else if (startPanel === 'feeds') {
                 if ((isFromRightEdge && isSwipeLeft) || isSwipeLeft) {
-                    // 进入文章列表
-                    if (this.viewManager) this.viewManager.isProgrammaticNav = true;
-                    // Removed: this.showPanel('articles'); (Let Router handle it)
-
-                    // 同步 URL (退出 feeds 面板)
                     if (this.viewManager) {
                         this.viewManager.isProgrammaticNav = true;
                         history.back();
@@ -276,3 +274,4 @@ export const Gestures = {
         document.addEventListener('touchend', handleTouchEnd, { passive: true });
     }
 };
+

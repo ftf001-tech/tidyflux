@@ -32,15 +32,13 @@ async function initApp() {
         if (!minifluxConfig.configured) {
             // 未配置 Miniflux，显示强制设置对话框
             console.log('Miniflux not configured, showing forced settings dialog');
-            ViewManager._initSubModules();
-            ViewManager.showSettingsDialog(true); // true = 强制模式
+            handleForceSettings();
             return;
         }
     } catch (err) {
         console.error('Check Miniflux config failed:', err);
         // 检查失败也显示设置对话框
-        ViewManager._initSubModules();
-        ViewManager.showSettingsDialog(true);
+        handleForceSettings();
         return;
     }
 
@@ -52,11 +50,22 @@ async function initApp() {
     setupEventListeners();
 }
 
+/**
+ * 处理强制设置流程
+ */
+function handleForceSettings() {
+    ViewManager.initSubModules();
+    ViewManager.showSettingsDialog(true);
+}
+
 document.addEventListener('DOMContentLoaded', initApp);
 
 // Register Service Worker for PWA
 if ('serviceWorker' in navigator) {
+    registerServiceWorker();
+}
 
+function registerServiceWorker() {
     let isControlled = Boolean(navigator.serviceWorker.controller);
 
     window.addEventListener('load', () => {
@@ -68,9 +77,16 @@ if ('serviceWorker' in navigator) {
                 registration.update();
 
                 // 每次页面可见时检查更新（针对移动端 PWA）
+                // 添加节流，避免频繁切换应用时产生过多请求
+                let lastUpdateCheck = 0;
+                const UPDATE_INTERVAL_MS = 60 * 60 * 1000; // 1小时
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible') {
-                        registration.update();
+                        const now = Date.now();
+                        if (now - lastUpdateCheck > UPDATE_INTERVAL_MS) {
+                            lastUpdateCheck = now;
+                            registration.update();
+                        }
                     }
                 });
 

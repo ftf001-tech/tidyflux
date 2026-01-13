@@ -10,9 +10,10 @@ import { AuthManager } from '../auth-manager.js';
 import { setTheme, setColorScheme, THEMES, COLOR_SCHEME_MODES } from '../theme-manager.js';
 import { createDialog, showToast } from './utils.js';
 import { Modal, CustomSelect } from './components.js';
-
 import { i18n } from '../i18n.js';
 import { AIService, AI_LANGUAGES } from '../ai-service.js';
+import { API_ENDPOINTS } from '../../constants.js';
+import { Icons } from '../icons.js';
 
 /**
  * 对话框管理
@@ -36,10 +37,8 @@ export const Dialogs = {
         const groups = AppState.groups || [];
         const { dialog, close } = createDialog('settings-dialog', `
             <div class="settings-dialog-content" style="position: relative;">
-                <button class="icon-btn close-dialog-btn" title="${i18n.t('settings.close')}" style="position: absolute; right: 16px; top: 16px; width: 32px; height: 32px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
+                <button class="icon-btn close-dialog-btn" title="${i18n.t('common.close')}" style="position: absolute; right: 16px; top: 16px; width: 32px; height: 32px;">
+                    ${Icons.close}
                 </button>
                 <h3>${i18n.t('dialogs.add_feed_title')}</h3>
                 
@@ -203,7 +202,7 @@ export const Dialogs = {
         // Initial Loading State
         const { dialog, close } = createDialog('settings-dialog', `
             <div class="settings-dialog-content" style="position: relative; min-height: 200px; display: flex; align-items: center; justify-content: center;">
-                <div class="miniflux-loading">${i18n.t('app.loading')}</div>
+                <div class="miniflux-loading">${i18n.t('common.loading')}</div>
             </div>
         `);
 
@@ -216,15 +215,13 @@ export const Dialogs = {
                 // Render Form
                 const contentHtml = `
                     <button class="icon-btn close-dialog-btn" title="${i18n.t('settings.close')}" style="position: absolute; right: 16px; top: 16px; width: 32px; height: 32px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
+                        ${Icons.close}
                     </button>
                     <h3>${i18n.t('dialogs.edit_subscription')}</h3>
                     
                     <div class="settings-section">
                         <label class="miniflux-input-label">${i18n.t('dialogs.feed_title')}</label>
-                        <input type="text" id="edit-feed-title" class="auth-input" value="${feed.title}" style="margin-bottom: 12px;">
+                        <input type="text" id="edit-feed-title" class="auth-input" style="margin-bottom: 12px;">
 
                         <div style="margin-bottom: 12px;">
                             <label class="miniflux-input-label">${i18n.t('nav.categories')}</label>
@@ -234,10 +231,10 @@ export const Dialogs = {
                         </div>
 
                         <label class="miniflux-input-label">${i18n.t('dialogs.site_url')}</label>
-                        <input type="url" id="edit-site-url" class="auth-input" value="${feed.site_url}" style="margin-bottom: 12px;">
+                        <input type="url" id="edit-site-url" class="auth-input" style="margin-bottom: 12px;">
 
                         <label class="miniflux-input-label">${i18n.t('dialogs.feed_url')}</label>
-                        <input type="url" id="edit-feed-url" class="auth-input" value="${feed.feed_url}" style="margin-bottom: 12px;">
+                        <input type="url" id="edit-feed-url" class="auth-input" style="margin-bottom: 12px;">
 
 
 
@@ -266,6 +263,11 @@ export const Dialogs = {
                 const groupSelect = dialog.querySelector('#edit-feed-group');
                 const siteUrlInput = dialog.querySelector('#edit-site-url');
                 const feedUrlInput = dialog.querySelector('#edit-feed-url');
+
+                // Set values safely to avoid XSS
+                titleInput.value = feed.title || '';
+                siteUrlInput.value = feed.site_url || '';
+                feedUrlInput.value = feed.feed_url || '';
 
 
                 closeBtn.addEventListener('click', close);
@@ -324,9 +326,7 @@ export const Dialogs = {
                 const container = dialog.querySelector('.settings-dialog-content');
                 container.innerHTML = `
                     <button class="icon-btn close-dialog-btn" title="${i18n.t('settings.close')}" style="position: absolute; right: 16px; top: 16px; width: 32px; height: 32px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
+                        ${Icons.close}
                     </button>
                     <div class="miniflux-config-error" style="text-align:center; padding: 20px;">${i18n.t('common.load_error')}</div>
                  `;
@@ -359,9 +359,7 @@ export const Dialogs = {
         const { dialog, close } = createDialog('settings-dialog', `
             <div class="settings-dialog-content" style="position: relative;">
                 <button class="icon-btn close-dialog-btn" title="${i18n.t('settings.close')}" style="position: absolute; right: 16px; top: 16px; width: 32px; height: 32px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
+                    ${Icons.close}
                 </button>
                 <h3>${i18n.t('dialogs.manage_groups')}</h3>
                 
@@ -485,9 +483,7 @@ export const Dialogs = {
             <div class="settings-dialog-content" style="position: relative;">
                 ${showFullSettings ? `
                 <button class="icon-btn close-dialog-btn" title="${i18n.t('settings.close')}" style="position: absolute; right: 16px; top: 16px; width: 32px; height: 32px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
+                    ${Icons.close}
                 </button>` : ''}
                 <h3>${forceMode ? i18n.t('settings.miniflux_settings') : i18n.t('settings.title')}</h3>
                 ${forceMode ? `<p style="color: var(--meta-color); font-size: 0.9em; margin-bottom: 16px;">${i18n.t('auth.configure_miniflux_hint')}</p>` : ''}
@@ -532,10 +528,21 @@ export const Dialogs = {
                         <input type="text" id="ai-api-url" class="auth-input" placeholder="https://api.openai.com/v1" style="margin-bottom: 8px;">
                         
                         <label class="miniflux-input-label">${i18n.t('ai.api_key')}</label>
-                        <input type="text" id="ai-api-key" class="auth-input" placeholder="sk-..." style="margin-bottom: 8px; -webkit-text-security: disc;" autocomplete="off" spellcheck="false">
+                        <input type="password" id="ai-api-key" class="auth-input" placeholder="sk-..." style="margin-bottom: 8px;" autocomplete="off" spellcheck="false">
                         
                         <label class="miniflux-input-label">${i18n.t('ai.model')}</label>
-                        <input type="text" id="ai-model" class="auth-input" placeholder="gpt-4.1-mini" style="margin-bottom: 12px;" autocomplete="off">
+                        <input type="text" id="ai-model" class="auth-input" placeholder="gpt-4.1-mini" style="margin-bottom: 8px;" autocomplete="off">
+
+                        <div style="display: flex; gap: 12px; margin-bottom: 12px;">
+                            <div style="flex: 1;">
+                                <label class="miniflux-input-label">${i18n.t('ai.temperature')}</label>
+                                <input type="number" id="ai-temperature" class="auth-input" min="0" max="2" step="0.1" placeholder="1.0">
+                            </div>
+                            <div style="flex: 1;">
+                                <label class="miniflux-input-label">${i18n.t('ai.concurrency')}</label>
+                                <input type="number" id="ai-concurrency" class="auth-input" min="1" max="50" step="1" placeholder="5">
+                            </div>
+                        </div>
 
                         <div style="margin-bottom: 12px;">
                             <label class="miniflux-input-label">${i18n.t('ai.target_lang')}</label>
@@ -560,7 +567,7 @@ export const Dialogs = {
                                 <label class="miniflux-input-label">${i18n.t('ai.digest_prompt')}</label>
                                 <textarea id="ai-digest-prompt" class="auth-input" rows="3" placeholder="${i18n.t('ai.digest_prompt_placeholder')}" style="margin-bottom: 8px; resize: vertical; min-height: 80px;"></textarea>
 
-                                <button type="button" id="ai-reset-prompts-btn" style="background: none; border: none; color: var(--text-secondary); padding: 4px 0; font-size: 0.85em; cursor: pointer; margin-top: 8px;">
+                                <button type="button" id="ai-reset-prompts-btn" style="background: none; border: none; color: var(--accent-color); padding: 4px 0; font-size: 0.85em; cursor: pointer; margin-top: 8px;">
                                     ${i18n.t('ai.reset_prompts')}
                                 </button>
                             </div>
@@ -570,7 +577,7 @@ export const Dialogs = {
 
                         <div class="appearance-mode-group">
                             <button type="button" id="ai-test-btn" class="appearance-mode-btn" style="flex: 1;">${i18n.t('settings.test_connection')}</button>
-                            <button type="submit" class="appearance-mode-btn active" style="flex: 1;">${i18n.t('settings.save')}</button>
+                            <button type="submit" class="appearance-mode-btn active" style="flex: 1;">${i18n.t('common.save')}</button>
                         </div>
                         <div id="ai-settings-msg" style="text-align: center; margin-top: 8px; font-size: 0.85em;"></div>
                     </form>
@@ -616,470 +623,10 @@ export const Dialogs = {
         const contentContainer = dialog.querySelector('.settings-dialog-content');
         if (contentContainer) CustomSelect.replaceAll(contentContainer);
 
-        // 渲染 Miniflux 配置表单
-        const renderConfigForm = () => {
-            minifluxConfigInfo.innerHTML = `
-                <div class="miniflux-config-item">
-                    <span class="miniflux-config-label">${i18n.t('settings.status')}</span>
-                    <span class="miniflux-config-value miniflux-status-disconnected">
-                        <span class="status-dot"></span>${i18n.t('settings.not_configured')}
-                    </span>
-                </div>
-                <form id="miniflux-config-form" class="miniflux-config-form">
-                    <label class="miniflux-input-label">${i18n.t('settings.miniflux_url')}</label>
-                    <input type="text" id="miniflux-url" class="auth-input" placeholder="https://miniflux.example.com" style="margin-bottom: 12px;" required>
-                    
-                    <label class="miniflux-input-label">${i18n.t('settings.auth_method')}</label>
-                    <div class="auth-type-selector" style="display:flex; gap:10px; margin-bottom:12px;">
-                        <button type="button" class="appearance-mode-btn active" id="auth-type-basic" style="flex:1; justify-content:center;">${i18n.t('settings.auth_basic')}</button>
-                        <button type="button" class="appearance-mode-btn" id="auth-type-apikey" style="flex:1; justify-content:center;">${i18n.t('settings.auth_api_key')}</button>
-                    </div>
-
-                    <div id="auth-fields-basic">
-                        <label class="miniflux-input-label">${i18n.t('settings.username_password')}</label>
-                        <input type="text" id="miniflux-username" class="auth-input" placeholder="admin" style="margin-bottom: 8px;">
-                        <input type="password" id="miniflux-password" class="auth-input" placeholder="••••••••" style="margin-bottom: 12px;">
-                    </div>
-
-                    <div id="auth-fields-apikey" style="display:none;">
-                        <label class="miniflux-input-label">${i18n.t('settings.auth_api_key')}</label>
-                        <input type="password" id="miniflux-api-key" class="auth-input" placeholder="${i18n.t('settings.api_key_placeholder')}" style="margin-bottom: 12px;" autocomplete="off">
-                    </div>
-
-                    <div class="appearance-mode-group">
-                        <button type="button" id="miniflux-test-btn" class="appearance-mode-btn" style="flex: 1;">${i18n.t('settings.test_connection')}</button>
-                        <button type="submit" class="appearance-mode-btn active" style="flex: 1;">${i18n.t('settings.save_config')}</button>
-                    </div>
-                    <div id="miniflux-config-msg" style="text-align: center; margin-top: 8px; font-size: 0.85em;"></div>
-                </form>
-            `;
-
-            // 绑定表单事件
-            const form = minifluxConfigInfo.querySelector('#miniflux-config-form');
-            const testBtn = minifluxConfigInfo.querySelector('#miniflux-test-btn');
-            const msgEl = minifluxConfigInfo.querySelector('#miniflux-config-msg');
-            const urlInput = minifluxConfigInfo.querySelector('#miniflux-url');
-            const usernameInput = minifluxConfigInfo.querySelector('#miniflux-username');
-            const passwordInput = minifluxConfigInfo.querySelector('#miniflux-password');
-            const apiKeyInput = minifluxConfigInfo.querySelector('#miniflux-api-key');
-
-            const btnBasic = minifluxConfigInfo.querySelector('#auth-type-basic');
-            const btnApiKey = minifluxConfigInfo.querySelector('#auth-type-apikey');
-            const fieldsBasic = minifluxConfigInfo.querySelector('#auth-fields-basic');
-            const fieldsApiKey = minifluxConfigInfo.querySelector('#auth-fields-apikey');
-
-            let currentAuthType = 'basic';
-
-            const toggleAuthType = (type) => {
-                currentAuthType = type;
-                if (type === 'basic') {
-                    btnBasic.classList.add('active');
-                    btnApiKey.classList.remove('active');
-                    fieldsBasic.style.display = 'block';
-                    fieldsApiKey.style.display = 'none';
-                } else {
-                    btnBasic.classList.remove('active');
-                    btnApiKey.classList.add('active');
-                    fieldsBasic.style.display = 'none';
-                    fieldsApiKey.style.display = 'block';
-                }
-            };
-
-            btnBasic.addEventListener('click', () => toggleAuthType('basic'));
-            btnApiKey.addEventListener('click', () => toggleAuthType('api_key'));
-
-            // 自动补全 URL 协议
-            const normalizeUrl = (url) => {
-                url = url.trim();
-                if (!url) return url;
-                if (!url.match(/^https?:\/\//i)) {
-                    url = 'https://' + url;
-                }
-                return url.replace(/\/+$/, '');
-            };
-
-            const getFormData = () => {
-                const url = normalizeUrl(urlInput.value);
-                urlInput.value = url;
-
-                if (currentAuthType === 'basic') {
-                    return {
-                        url,
-                        username: usernameInput.value.trim(),
-                        password: passwordInput.value,
-                        apiKey: null,
-                        authType: 'basic'
-                    };
-                } else {
-                    return {
-                        url,
-                        username: '',
-                        password: '',
-                        apiKey: apiKeyInput.value.trim(),
-                        authType: 'api_key'
-                    };
-                }
-            };
-
-            // 测试连接
-            testBtn.addEventListener('click', async () => {
-                const data = getFormData();
-
-                if (!data.url) {
-                    msgEl.textContent = i18n.t('settings.fill_all_info');
-                    msgEl.style.color = '#ff4d4f';
-                    return;
-                }
-
-                if (data.authType === 'basic' && (!data.username || !data.password)) {
-                    msgEl.textContent = i18n.t('settings.fill_all_info');
-                    msgEl.style.color = '#ff4d4f';
-                    return;
-                }
-                if (data.authType === 'api_key' && !data.apiKey) {
-                    msgEl.textContent = i18n.t('settings.fill_all_info');
-                    msgEl.style.color = '#ff4d4f';
-                    return;
-                }
-
-                testBtn.disabled = true;
-                testBtn.textContent = i18n.t('settings.testing');
-                msgEl.textContent = '';
-
-                try {
-                    const result = await AuthManager.testMinifluxConnection(
-                        data.url, data.username, data.password, data.apiKey, data.authType
-                    );
-                    msgEl.textContent = `✓ ${i18n.t('settings.connection_success')} (${result.user})`;
-                    msgEl.style.color = '#52c41a';
-                } catch (err) {
-                    msgEl.textContent = err.message;
-                    msgEl.style.color = '#ff4d4f';
-                } finally {
-                    testBtn.disabled = false;
-                    testBtn.textContent = i18n.t('settings.test_connection');
-                }
-            });
-
-            // 保存配置
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const data = getFormData();
-
-                const submitBtn = form.querySelector('button[type="submit"]');
-                submitBtn.disabled = true;
-                submitBtn.textContent = i18n.t('settings.saving');
-                msgEl.textContent = '';
-
-                try {
-                    await AuthManager.saveMinifluxConfig(
-                        data.url, data.username, data.password, data.apiKey, data.authType
-                    );
-                    msgEl.textContent = `✓ ${i18n.t('settings.save_success_refresh')}`;
-                    msgEl.style.color = '#52c41a';
-                    // 刷新显示
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
-                } catch (err) {
-                    msgEl.textContent = err.message;
-                    msgEl.style.color = '#ff4d4f';
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = i18n.t('settings.save_config');
-                }
-            });
-        };
-
-        // 渲染已配置状态
-        const renderConfigured = (config) => {
-            const sourceText = config.source === 'env' ? i18n.t('settings.env_var') : i18n.t('settings.manual_config');
-            const isEnv = config.source === 'env';
-
-            minifluxConfigInfo.innerHTML = `
-                <div class="miniflux-config-item">
-                    <span class="miniflux-config-label">${i18n.t('settings.status')}</span>
-                    <span class="miniflux-config-value miniflux-status-connected" id="miniflux-status-value">
-                        <span class="status-dot" style="background-color: var(--meta-color);"></span>${i18n.t('settings.connected')} ${sourceText} <span style="font-size: 0.9em; opacity: 0.8;">(${i18n.t('app.loading')}...)</span>
-                    </span>
-                </div>
-                <div class="miniflux-config-item">
-                    <span class="miniflux-config-label">${i18n.t('settings.server_url')}</span>
-                    <span class="miniflux-config-value">${config.url}</span>
-                </div>
-                <div class="miniflux-config-item">
-                    <span class="miniflux-config-label">${config.authType === 'api_key' ? i18n.t('settings.auth_api_key') : i18n.t('settings.username')}</span>
-                    <span class="miniflux-config-value">${config.authType === 'api_key' ? '********' : (config.username || '-')}</span>
-                </div>
-                ${!isEnv ? `
-                <div class="appearance-mode-group" style="margin-top: 12px;">
-                    <button id="edit-miniflux-config-btn" class="appearance-mode-btn" style="justify-content: center; width: 100%;">${i18n.t('settings.edit_connection')}</button>
-                </div>
-                ` : ''}
-            `;
-
-            // 异步检查真实连接状态
-            AuthManager.getMinifluxStatus().then(status => {
-                const statusEl = minifluxConfigInfo.querySelector('#miniflux-status-value');
-                if (statusEl) {
-                    if (status.connected) {
-                        statusEl.innerHTML = `<span class="status-dot"></span>${i18n.t('settings.connected')} ${sourceText}`;
-                    } else {
-                        statusEl.className = 'miniflux-config-value miniflux-status-disconnected';
-                        // 使用 style 覆盖默认颜色，确保错误状态显眼
-                        statusEl.style.color = 'var(--danger-color)';
-                        statusEl.innerHTML = `<span class="status-dot" style="background-color: var(--danger-color);"></span>${i18n.t('auth.login_failed')}: ${status.error || 'Connection Invalid'}`;
-                    }
-                }
-            }).catch(err => {
-                console.error('Check status failed', err);
-                const statusEl = minifluxConfigInfo.querySelector('#miniflux-status-value');
-                if (statusEl) {
-                    statusEl.className = 'miniflux-config-value miniflux-status-disconnected';
-                    statusEl.style.color = 'var(--danger-color)';
-                    statusEl.innerHTML = `<span class="status-dot" style="background-color: var(--danger-color);"></span>Error: ${err.message}`;
-                }
-            });
-
-            // 绑定修改配置按钮事件（仅非环境变量配置时显示）
-            if (!isEnv) {
-                const editBtn = minifluxConfigInfo.querySelector('#edit-miniflux-config-btn');
-                editBtn?.addEventListener('click', () => {
-                    renderConfigFormWithValues(config.url, config.username, config.apiKey, config.authType);
-                });
-            }
-        };
-
-        // 渲染配置表单（带预填值）
-        const renderConfigFormWithValues = (prefillUrl = '', prefillUsername = '', prefillApiKey = '', prefillAuthType = 'basic') => {
-            minifluxConfigInfo.innerHTML = `
-                <div class="miniflux-config-item">
-                    <span class="miniflux-config-label">${i18n.t('settings.status')}</span>
-                    <span class="miniflux-config-value miniflux-status-disconnected">
-                        <span class="status-dot"></span>${i18n.t('settings.editing')}
-                    </span>
-                </div>
-                <form id="miniflux-config-form" class="miniflux-config-form">
-                    <label class="miniflux-input-label">${i18n.t('settings.miniflux_url')}</label>
-                    <input type="text" id="miniflux-url" class="auth-input" placeholder="https://miniflux.example.com" style="margin-bottom: 12px;" value="${prefillUrl}" required>
-                    
-                    <label class="miniflux-input-label">${i18n.t('settings.auth_method')}</label>
-                    <div class="auth-type-selector" style="display:flex; gap:10px; margin-bottom:12px;">
-                        <button type="button" class="appearance-mode-btn ${prefillAuthType === 'basic' ? 'active' : ''}" id="auth-type-basic" style="flex:1; justify-content:center;">${i18n.t('settings.auth_basic')}</button>
-                        <button type="button" class="appearance-mode-btn ${prefillAuthType === 'api_key' ? 'active' : ''}" id="auth-type-apikey" style="flex:1; justify-content:center;">${i18n.t('settings.auth_api_key')}</button>
-                    </div>
-
-                    <div id="auth-fields-basic" style="${prefillAuthType === 'basic' ? 'display:block' : 'display:none'}">
-                        <label class="miniflux-input-label">${i18n.t('settings.username_password')}</label>
-                        <input type="text" id="miniflux-username" class="auth-input" placeholder="admin" style="margin-bottom: 8px;" value="${prefillUsername}">
-                        <input type="password" id="miniflux-password" class="auth-input" placeholder="${i18n.t('settings.enter_new_password')}" style="margin-bottom: 12px;">
-                    </div>
-
-                    <div id="auth-fields-apikey" style="${prefillAuthType === 'api_key' ? 'display:block' : 'display:none'}">
-                        <label class="miniflux-input-label">${i18n.t('settings.auth_api_key')}</label>
-                        <input type="password" id="miniflux-api-key" class="auth-input" placeholder="${i18n.t('settings.api_key_placeholder')}" style="margin-bottom: 12px;" value="${prefillApiKey || ''}" autocomplete="off">
-                    </div>
-
-                    <div class="appearance-mode-group">
-                        <button type="button" id="miniflux-cancel-btn" class="appearance-mode-btn" style="flex: 1;">${i18n.t('common.cancel')}</button>
-                        <button type="button" id="miniflux-test-btn" class="appearance-mode-btn" style="flex: 1;">${i18n.t('settings.test_connection')}</button>
-                        <button type="submit" class="appearance-mode-btn active" style="flex: 1;">${i18n.t('settings.save_config')}</button>
-                    </div>
-                    <div id="miniflux-config-msg" style="text-align: center; margin-top: 8px; font-size: 0.85em;"></div>
-                </form>
-            `;
-
-            // 绑定表单事件
-            const form = minifluxConfigInfo.querySelector('#miniflux-config-form');
-            const testBtn = minifluxConfigInfo.querySelector('#miniflux-test-btn');
-            const cancelBtn = minifluxConfigInfo.querySelector('#miniflux-cancel-btn');
-            const msgEl = minifluxConfigInfo.querySelector('#miniflux-config-msg');
-            const urlInput = minifluxConfigInfo.querySelector('#miniflux-url');
-            const usernameInput = minifluxConfigInfo.querySelector('#miniflux-username');
-            const passwordInput = minifluxConfigInfo.querySelector('#miniflux-password');
-            const apiKeyInput = minifluxConfigInfo.querySelector('#miniflux-api-key');
-
-            const btnBasic = minifluxConfigInfo.querySelector('#auth-type-basic');
-            const btnApiKey = minifluxConfigInfo.querySelector('#auth-type-apikey');
-            const fieldsBasic = minifluxConfigInfo.querySelector('#auth-fields-basic');
-            const fieldsApiKey = minifluxConfigInfo.querySelector('#auth-fields-apikey');
-
-            let currentAuthType = prefillAuthType || 'basic';
-
-            const toggleAuthType = (type) => {
-                currentAuthType = type;
-                if (type === 'basic') {
-                    btnBasic.classList.add('active');
-                    btnApiKey.classList.remove('active');
-                    fieldsBasic.style.display = 'block';
-                    fieldsApiKey.style.display = 'none';
-                } else {
-                    btnBasic.classList.remove('active');
-                    btnApiKey.classList.add('active');
-                    fieldsBasic.style.display = 'none';
-                    fieldsApiKey.style.display = 'block';
-                }
-            };
-
-            btnBasic.addEventListener('click', () => toggleAuthType('basic'));
-            btnApiKey.addEventListener('click', () => toggleAuthType('api_key'));
-
-            // 自动补全 URL 协议
-            const normalizeUrl = (url) => {
-                url = url.trim();
-                if (!url) return url;
-                if (!url.match(/^https?:\/\//i)) {
-                    url = 'https://' + url;
-                }
-                return url.replace(/\/+$/, '');
-            };
-
-            const getFormData = () => {
-                const url = normalizeUrl(urlInput.value);
-                urlInput.value = url;
-
-                if (currentAuthType === 'basic') {
-                    // 如果在此模式下，且没有输入新密码，则可能用户不想修改密码
-                    // 但这里是“手动配置”的逻辑，后端是saveManualConfig。
-                    // 这里的逻辑是：如果用户在编辑状态，如果不输入密码，可能想保留原密码？
-                    // 由于MinifluxConfigStore加密存储，这里如果不提供密码，后端无法解密原密码。
-                    // 所以用户必须重新输入密码。 placeholder已经提示 Enter new password.
-
-                    return {
-                        url,
-                        username: usernameInput.value.trim(),
-                        password: passwordInput.value,
-                        apiKey: null,
-                        authType: 'basic'
-                    };
-                } else {
-                    return {
-                        url,
-                        username: '',
-                        password: '',
-                        apiKey: apiKeyInput.value.trim(),
-                        authType: 'api_key'
-                    };
-                }
-            };
-
-            // 取消编辑
-            cancelBtn.addEventListener('click', async () => {
-                try {
-                    const config = await AuthManager.getMinifluxConfig();
-                    if (config.configured) {
-                        renderConfigured(config);
-                    } else {
-                        renderConfigForm();
-                    }
-                } catch (err) {
-                    console.error('Load Miniflux config error:', err);
-                }
-            });
-
-            // 测试连接
-            testBtn.addEventListener('click', async () => {
-                const data = getFormData();
-
-                if (!data.url) {
-                    msgEl.textContent = i18n.t('settings.fill_all_info');
-                    msgEl.style.color = '#ff4d4f';
-                    return;
-                }
-
-                if (data.authType === 'basic' && (!data.username || !data.password)) {
-                    msgEl.textContent = i18n.t('settings.fill_all_info');
-                    msgEl.style.color = '#ff4d4f';
-                    return;
-                }
-                if (data.authType === 'api_key' && !data.apiKey) {
-                    msgEl.textContent = i18n.t('settings.fill_all_info');
-                    msgEl.style.color = '#ff4d4f';
-                    return;
-                }
-
-                testBtn.disabled = true;
-                testBtn.textContent = i18n.t('settings.testing');
-                msgEl.textContent = '';
-
-                try {
-                    const result = await AuthManager.testMinifluxConnection(
-                        data.url, data.username, data.password, data.apiKey, data.authType
-                    );
-                    msgEl.textContent = `✓ ${i18n.t('settings.connection_success')} (${result.user})`;
-                    msgEl.style.color = '#52c41a';
-                } catch (err) {
-                    msgEl.textContent = err.message;
-                    msgEl.style.color = '#ff4d4f';
-                } finally {
-                    testBtn.disabled = false;
-                    testBtn.textContent = i18n.t('settings.test_connection');
-                }
-            });
-
-            // 保存配置
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const data = getFormData();
-
-                // Save Logic...
-                // Validate if password is required. 
-                // Currently yes, forcing re-entry for security/simplicity.
-                if (data.authType === 'basic' && !data.password) {
-                    msgEl.textContent = i18n.t('settings.fill_all_info');
-                    msgEl.style.color = '#ff4d4f';
-                    return;
-                }
-
-                const submitBtn = form.querySelector('button[type="submit"]');
-                submitBtn.disabled = true;
-                submitBtn.textContent = i18n.t('settings.saving');
-                msgEl.textContent = '';
-
-                try {
-                    await AuthManager.saveMinifluxConfig(
-                        data.url, data.username, data.password, data.apiKey, data.authType
-                    );
-                    msgEl.textContent = `✓ ${i18n.t('settings.save_success_refresh')}`;
-                    msgEl.style.color = '#52c41a';
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 1000);
-                } catch (err) {
-                    msgEl.textContent = err.message;
-                    msgEl.style.color = '#ff4d4f';
-                    submitBtn.disabled = false;
-                    submitBtn.textContent = i18n.t('settings.save_config');
-                }
-            });
-        };
-
         // 异步加载 Miniflux 配置信息
-        (async () => {
-            try {
-                const config = await AuthManager.getMinifluxConfig();
-                if (config.configured) {
-                    renderConfigured(config);
-                } else {
-                    renderConfigForm();
-                }
-            } catch (err) {
-                console.error('Load Miniflux config error:', err);
-                minifluxConfigInfo.innerHTML = `
-                    <div class="miniflux-config-error" style="text-align: center; color: var(--danger-color); margin-bottom: 12px;">${i18n.t('common.load_error')}</div>
-                    <div class="appearance-mode-group">
-                        <button id="retry-miniflux-btn" class="appearance-mode-btn" style="width: 100%; justify-content: center;">${i18n.t('settings.edit_connection')}</button>
-                    </div>
-                `;
-                const retryBtn = minifluxConfigInfo.querySelector('#retry-miniflux-btn');
-                if (retryBtn) {
-                    retryBtn.addEventListener('click', () => {
-                        renderConfigForm();
-                    });
-                }
-            }
-        })();
+        this._loadMinifluxConfig(minifluxConfigInfo);
 
-        // 强制模式下不允许关闭
+        // 主题色切换强制模式下不允许关闭
         if (!forceMode) {
             closeBtn?.addEventListener('click', close);
             dialog.addEventListener('click', (e) => {
@@ -1140,128 +687,7 @@ export const Dialogs = {
 
         // AI 设置逻辑
         if (showFullSettings) {
-            const aiForm = dialog.querySelector('#ai-settings-form');
-            const aiUrlInput = dialog.querySelector('#ai-api-url');
-            const aiKeyInput = dialog.querySelector('#ai-api-key');
-            const aiModelInput = dialog.querySelector('#ai-model');
-            const aiTargetLangSelect = dialog.querySelector('#ai-target-lang');
-            const aiTranslatePromptInput = dialog.querySelector('#ai-translate-prompt');
-            const aiSummarizePromptInput = dialog.querySelector('#ai-summarize-prompt');
-            const aiDigestPromptInput = dialog.querySelector('#ai-digest-prompt');
-            const aiMsg = dialog.querySelector('#ai-settings-msg');
-            const collapsibleToggle = dialog.querySelector('.collapsible-toggle');
-            const collapsibleContent = dialog.querySelector('.collapsible-content');
-
-            // 加载当前 AI 配置
-            const aiConfig = AIService.getConfig();
-            const defaultTranslatePrompt = AIService.getDefaultPrompt('translate');
-            const defaultSummarizePrompt = AIService.getDefaultPrompt('summarize');
-            const defaultDigestPrompt = AIService.getDefaultPrompt('digest');
-
-            if (aiUrlInput) aiUrlInput.value = aiConfig.apiUrl || '';
-            if (aiKeyInput) aiKeyInput.value = aiConfig.apiKey || '';
-            if (aiModelInput) aiModelInput.value = aiConfig.model || 'gpt-4.1-mini';
-
-            if (aiTargetLangSelect) {
-                aiTargetLangSelect.value = aiConfig.targetLang || 'zh-CN';
-                aiTargetLangSelect.dispatchEvent(new Event('change'));
-            }
-
-            if (aiTranslatePromptInput) aiTranslatePromptInput.value = aiConfig.translatePrompt || defaultTranslatePrompt;
-            if (aiSummarizePromptInput) aiSummarizePromptInput.value = aiConfig.summarizePrompt || defaultSummarizePrompt;
-            if (aiDigestPromptInput) aiDigestPromptInput.value = aiConfig.digestPrompt || defaultDigestPrompt;
-
-            // 折叠面板切换
-            if (collapsibleToggle) {
-                collapsibleToggle.addEventListener('click', () => {
-                    const isHidden = collapsibleContent.style.display === 'none';
-                    collapsibleContent.style.display = isHidden ? 'block' : 'none';
-                    collapsibleToggle.querySelector('.toggle-icon').style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
-                    collapsibleToggle.querySelector('.toggle-icon').style.display = 'inline-block';
-                    collapsibleToggle.querySelector('.toggle-icon').style.transition = 'transform 0.2s';
-                });
-            }
-
-            // Reset Prompts Button
-            const aiResetPromptsBtn = dialog.querySelector('#ai-reset-prompts-btn');
-            if (aiResetPromptsBtn) {
-                aiResetPromptsBtn.addEventListener('click', () => {
-                    if (aiTranslatePromptInput) aiTranslatePromptInput.value = defaultTranslatePrompt;
-                    if (aiSummarizePromptInput) aiSummarizePromptInput.value = defaultSummarizePrompt;
-                    if (aiDigestPromptInput) aiDigestPromptInput.value = defaultDigestPrompt;
-                });
-            }
-
-
-
-            // Test Connection
-            const aiTestBtn = dialog.querySelector('#ai-test-btn');
-            if (aiTestBtn) {
-                aiTestBtn.addEventListener('click', async () => {
-                    const config = {
-                        apiUrl: aiUrlInput.value.trim(),
-                        apiKey: aiKeyInput.value.trim(),
-                        model: aiModelInput.value.trim(),
-                        targetLang: aiTargetLangSelect.value
-                    };
-
-                    if (!config.apiUrl || !config.apiKey) {
-                        aiMsg.textContent = i18n.t('settings.fill_all_info');
-                        aiMsg.style.color = '#ff4d4f';
-                        return;
-                    }
-
-                    aiTestBtn.disabled = true;
-                    // Cache original text just in case
-                    const originalText = aiTestBtn.textContent;
-                    aiTestBtn.textContent = i18n.t('settings.testing');
-                    aiMsg.textContent = '';
-
-                    try {
-                        const result = await AIService.testConnection(config);
-                        aiMsg.textContent = `✓ Success! Reply: "${result.reply}"`;
-                        aiMsg.style.color = '#52c41a';
-                    } catch (err) {
-                        aiMsg.textContent = err.message;
-                        aiMsg.style.color = '#ff4d4f';
-                    } finally {
-                        aiTestBtn.disabled = false;
-                        aiTestBtn.textContent = originalText;
-                    }
-                });
-            }
-
-            // 保存 AI 配置
-            if (aiForm) {
-                aiForm.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-
-                    const config = {
-                        apiUrl: aiUrlInput.value.trim(),
-                        apiKey: aiKeyInput.value.trim(),
-                        model: aiModelInput.value.trim(),
-                        targetLang: aiTargetLangSelect.value,
-                        translatePrompt: aiTranslatePromptInput.value.trim(),
-                        summarizePrompt: aiSummarizePromptInput.value.trim(),
-                        digestPrompt: aiDigestPromptInput.value.trim()
-                    };
-
-                    try {
-                        await AIService.saveConfig(config);
-
-                        aiMsg.textContent = `✓ ${i18n.t('ai.save_success')}`;
-                        aiMsg.style.color = '#52c41a';
-                    } catch (err) {
-                        console.error('Save AI settings error:', err);
-                        aiMsg.textContent = `${i18n.t('ai.api_error')}`;
-                        aiMsg.style.color = '#ff4d4f';
-                    }
-
-                    setTimeout(() => {
-                        aiMsg.textContent = '';
-                    }, 3000);
-                });
-            }
+            this._bindAISettingsEvents(dialog);
         }
 
         // 修改密码（仅在非强制模式下存在）
@@ -1273,7 +699,7 @@ export const Dialogs = {
 
                 if (newPwd !== confirmPwd) {
                     passwordMsg.textContent = i18n.t('settings.password_mismatch');
-                    passwordMsg.style.color = '#ff4d4f';
+                    passwordMsg.style.color = 'var(--danger-color)';
                     return;
                 }
 
@@ -1283,12 +709,12 @@ export const Dialogs = {
                 try {
                     await AuthManager.changePassword(newPwd);
                     passwordMsg.textContent = i18n.t('settings.password_change_success');
-                    passwordMsg.style.color = '#52c41a';
+                    passwordMsg.style.color = 'var(--accent-color)';
                     dialog.querySelector('#settings-new-password').value = '';
                     dialog.querySelector('#settings-confirm-password').value = '';
                 } catch (err) {
                     passwordMsg.textContent = err.message;
-                    passwordMsg.style.color = '#ff4d4f';
+                    passwordMsg.style.color = 'var(--danger-color)';
                 } finally {
                     submitBtn.disabled = false;
                 }
@@ -1307,7 +733,147 @@ export const Dialogs = {
     },
 
     /**
+     * 绑定 AI 设置相关事件
+     */
+    _bindAISettingsEvents(dialog) {
+        const aiForm = dialog.querySelector('#ai-settings-form');
+        const aiUrlInput = dialog.querySelector('#ai-api-url');
+        const aiKeyInput = dialog.querySelector('#ai-api-key');
+        const aiModelInput = dialog.querySelector('#ai-model');
+        const aiTemperatureInput = dialog.querySelector('#ai-temperature');
+        const aiConcurrencyInput = dialog.querySelector('#ai-concurrency');
+        const aiTargetLangSelect = dialog.querySelector('#ai-target-lang');
+        const aiTranslatePromptInput = dialog.querySelector('#ai-translate-prompt');
+        const aiSummarizePromptInput = dialog.querySelector('#ai-summarize-prompt');
+        const aiDigestPromptInput = dialog.querySelector('#ai-digest-prompt');
+        const aiMsg = dialog.querySelector('#ai-settings-msg');
+        const collapsibleToggle = dialog.querySelector('.collapsible-toggle');
+        const collapsibleContent = dialog.querySelector('.collapsible-content');
+
+        // 加载当前 AI 配置
+        const aiConfig = AIService.getConfig();
+        const defaultTranslatePrompt = AIService.getDefaultPrompt('translate');
+        const defaultSummarizePrompt = AIService.getDefaultPrompt('summarize');
+        const defaultDigestPrompt = AIService.getDefaultPrompt('digest');
+
+        if (aiUrlInput) aiUrlInput.value = aiConfig.apiUrl || '';
+        if (aiKeyInput) aiKeyInput.value = aiConfig.apiKey || '';
+        if (aiModelInput) aiModelInput.value = aiConfig.model || 'gpt-4.1-mini';
+
+        // 温度和并发初始化
+        if (aiTemperatureInput) {
+            aiTemperatureInput.value = aiConfig.temperature ?? 1;
+        }
+        if (aiConcurrencyInput) {
+            aiConcurrencyInput.value = aiConfig.concurrency ?? 5;
+        }
+
+        if (aiTargetLangSelect) {
+            aiTargetLangSelect.value = aiConfig.targetLang || 'zh-CN';
+            aiTargetLangSelect.dispatchEvent(new Event('change'));
+        }
+
+        if (aiTranslatePromptInput) aiTranslatePromptInput.value = aiConfig.translatePrompt || defaultTranslatePrompt;
+        if (aiSummarizePromptInput) aiSummarizePromptInput.value = aiConfig.summarizePrompt || defaultSummarizePrompt;
+        if (aiDigestPromptInput) aiDigestPromptInput.value = aiConfig.digestPrompt || defaultDigestPrompt;
+
+        // 折叠面板切换
+        if (collapsibleToggle) {
+            collapsibleToggle.addEventListener('click', () => {
+                const isHidden = collapsibleContent.style.display === 'none';
+                collapsibleContent.style.display = isHidden ? 'block' : 'none';
+                const icon = collapsibleToggle.querySelector('.toggle-icon');
+                if (icon) {
+                    icon.style.transform = isHidden ? 'rotate(90deg)' : 'rotate(0deg)';
+                    icon.style.display = 'inline-block';
+                    icon.style.transition = 'transform 0.2s';
+                }
+            });
+        }
+
+        // Reset Prompts Button
+        const aiResetPromptsBtn = dialog.querySelector('#ai-reset-prompts-btn');
+        if (aiResetPromptsBtn) {
+            aiResetPromptsBtn.addEventListener('click', () => {
+                if (aiTranslatePromptInput) aiTranslatePromptInput.value = defaultTranslatePrompt;
+                if (aiSummarizePromptInput) aiSummarizePromptInput.value = defaultSummarizePrompt;
+                if (aiDigestPromptInput) aiDigestPromptInput.value = defaultDigestPrompt;
+            });
+        }
+
+        // Test Connection
+        const aiTestBtn = dialog.querySelector('#ai-test-btn');
+        if (aiTestBtn) {
+            aiTestBtn.addEventListener('click', async () => {
+                const config = {
+                    apiUrl: aiUrlInput.value.trim(),
+                    apiKey: aiKeyInput.value.trim(),
+                    model: aiModelInput.value.trim(),
+                    targetLang: aiTargetLangSelect.value
+                };
+
+                if (!config.apiUrl || !config.apiKey) {
+                    aiMsg.textContent = i18n.t('settings.fill_all_info');
+                    aiMsg.style.color = 'var(--danger-color)';
+                    return;
+                }
+
+                aiTestBtn.disabled = true;
+                const originalText = aiTestBtn.textContent;
+                aiTestBtn.textContent = i18n.t('settings.testing');
+                aiMsg.textContent = '';
+
+                try {
+                    const result = await AIService.testConnection(config);
+                    aiMsg.textContent = `✓ Success! Reply: "${result.reply}"`;
+                    aiMsg.style.color = 'var(--accent-color)';
+                } catch (err) {
+                    aiMsg.textContent = err.message;
+                    aiMsg.style.color = 'var(--danger-color)';
+                } finally {
+                    aiTestBtn.disabled = false;
+                    aiTestBtn.textContent = originalText;
+                }
+            });
+        }
+
+        // 保存 AI 配置
+        if (aiForm) {
+            aiForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+
+                const config = {
+                    apiUrl: aiUrlInput.value.trim(),
+                    apiKey: aiKeyInput.value.trim(),
+                    model: aiModelInput.value.trim(),
+                    temperature: parseFloat(aiTemperatureInput?.value) || 1,
+                    concurrency: parseInt(aiConcurrencyInput?.value) || 5,
+                    targetLang: aiTargetLangSelect.value,
+                    translatePrompt: aiTranslatePromptInput.value.trim(),
+                    summarizePrompt: aiSummarizePromptInput.value.trim(),
+                    digestPrompt: aiDigestPromptInput.value.trim()
+                };
+
+                try {
+                    await AIService.saveConfig(config);
+                    aiMsg.textContent = `✓ ${i18n.t('ai.save_success')}`;
+                    aiMsg.style.color = 'var(--accent-color)';
+                } catch (err) {
+                    console.error('Save AI settings error:', err);
+                    aiMsg.textContent = `${i18n.t('ai.api_error')}`;
+                    aiMsg.style.color = 'var(--danger-color)';
+                }
+
+                setTimeout(() => {
+                    aiMsg.textContent = '';
+                }, 3000);
+            });
+        }
+    },
+
+    /**
      * 显示定时简报配置对话框
+
      * @param {Object} context - { feedId, groupId } 如果都为空则针对 'all'
      */
     showDigestScheduleDialog(context = {}) {
@@ -1331,9 +897,7 @@ export const Dialogs = {
         const { dialog, close } = createDialog('settings-dialog', `
             <div class="settings-dialog-content" style="position: relative; max-width: 400px; min-height: 480px;">
                 <button class="icon-btn close-dialog-btn" title="${i18n.t('settings.close')}" style="position: absolute; right: 16px; top: 16px; width: 32px; height: 32px;">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
+                    ${Icons.close}
                 </button>
                 <h3>${i18n.t('ai.scheduled_digest')}</h3>
                 <p style="color: var(--meta-color); font-size: 0.9em; margin-bottom: 24px;">
@@ -1410,9 +974,7 @@ export const Dialogs = {
                 <div id="other-schedules-view" style="display: none; height: 100%; flex-direction: column;">
                      <div style="display: flex; align-items: center; margin-bottom: 16px;">
                         <button type="button" id="back-to-main-btn" class="icon-btn" style="margin-right: 8px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="24" height="24">
-                                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/>
-                            </svg>
+                            ${Icons.arrow_back}
                         </button>
                         <h4 style="margin: 0;">${i18n.t('settings.other_schedules')}</h4>
                      </div>
@@ -1420,7 +982,6 @@ export const Dialogs = {
                          <!-- Filled by JS -->
                      </div>
                 </div>
-                </form>
             </div>
         `);
 
@@ -1517,7 +1078,7 @@ export const Dialogs = {
                             ${freqLabel} • ${timeStr}
                         </div>
                     </div>
-                    <button class="icon-btn delete-task-btn" style="color: #ff4d4f; margin-left: 8px; width: 28px; height: 28px; opacity: 0.8; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
+                    <button class="icon-btn delete-task-btn" style="color: var(--danger-color); margin-left: 8px; width: 28px; height: 28px; opacity: 0.8; transition: opacity 0.2s;" onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.8'">
                         <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
                             <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
                         </svg>
@@ -1533,7 +1094,7 @@ export const Dialogs = {
 
                     // Save immediately
                     try {
-                        await fetch('/api/preferences', {
+                        await fetch(API_ENDPOINTS.PREFERENCES.BASE, {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -1672,7 +1233,7 @@ export const Dialogs = {
         // Fetch
         // --- Load Data ---
 
-        fetch('/api/preferences', {
+        fetch(API_ENDPOINTS.PREFERENCES.BASE, {
             headers: { 'Authorization': `Bearer ${AuthManager.getToken()}` }
         })
             .then(res => res.json())
@@ -1786,7 +1347,7 @@ export const Dialogs = {
             const finalTasks = [...otherTasks, ...newTasks];
 
             try {
-                await fetch('/api/preferences', {
+                await fetch(API_ENDPOINTS.PREFERENCES.BASE, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1798,14 +1359,255 @@ export const Dialogs = {
                     })
                 });
                 msgEl.textContent = `✓ ${i18n.t('settings.save_success')}`;
-                msgEl.style.color = '#52c41a';
+                msgEl.style.color = 'var(--accent-color)';
                 setTimeout(close, 1000);
             } catch (err) {
                 console.error('Save error:', err);
                 msgEl.textContent = i18n.t('ai.api_error');
-                msgEl.style.color = '#ff4d4f';
+                msgEl.style.color = 'var(--danger-color)';
                 submitBtn.disabled = false;
                 submitBtn.textContent = i18n.t('settings.save');
+            }
+        });
+    },
+
+    /**
+     * 异步加载 Miniflux 配置逻辑
+     */
+    async _loadMinifluxConfig(minifluxConfigInfo) {
+        try {
+            const config = await AuthManager.getMinifluxConfig();
+            if (config.configured) {
+                this._renderMinifluxConfigured(minifluxConfigInfo, config);
+            } else {
+                this._renderMinifluxConfigForm(minifluxConfigInfo);
+            }
+        } catch (err) {
+            console.error('Load Miniflux config error:', err);
+            minifluxConfigInfo.innerHTML = `
+                <div class="miniflux-config-error" style="text-align: center; color: var(--danger-color); margin-bottom: 12px;">${i18n.t('common.load_error')}</div>
+                <div class="appearance-mode-group">
+                    <button id="retry-miniflux-btn" class="appearance-mode-btn" style="width: 100%; justify-content: center;">${i18n.t('settings.edit_connection')}</button>
+                </div>
+            `;
+            minifluxConfigInfo.querySelector('#retry-miniflux-btn')?.addEventListener('click', () => {
+                this._renderMinifluxConfigForm(minifluxConfigInfo);
+            });
+        }
+    },
+
+    /**
+     * 渲染已配置状态
+     */
+    _renderMinifluxConfigured(container, config) {
+        const sourceText = config.source === 'env' ? i18n.t('settings.env_var') : i18n.t('settings.manual_config');
+        const isEnv = config.source === 'env';
+
+        container.innerHTML = `
+            <div class="miniflux-config-item">
+                <span class="miniflux-config-label">${i18n.t('settings.status')}</span>
+                <span class="miniflux-config-value miniflux-status-connected" id="miniflux-status-value">
+                    <span class="status-dot" style="background-color: var(--meta-color);"></span>${i18n.t('settings.connected')} ${sourceText} <span style="font-size: 0.9em; opacity: 0.8;">(${i18n.t('app.loading')}...)</span>
+                </span>
+            </div>
+            <div class="miniflux-config-item">
+                <span class="miniflux-config-label">${i18n.t('settings.server_url')}</span>
+                <span class="miniflux-config-value">${config.url}</span>
+            </div>
+            <div class="miniflux-config-item">
+                <span class="miniflux-config-label">${config.authType === 'api_key' ? i18n.t('settings.auth_api_key') : i18n.t('settings.username')}</span>
+                <span class="miniflux-config-value">${config.authType === 'api_key' ? '********' : (config.username || '-')}</span>
+            </div>
+            ${!isEnv ? `
+            <div class="appearance-mode-group" style="margin-top: 12px;">
+                <button id="edit-miniflux-config-btn" class="appearance-mode-btn" style="justify-content: center; width: 100%;">${i18n.t('settings.edit_connection')}</button>
+            </div>
+            ` : ''}
+        `;
+
+        // 异步检查真实连接状态
+        AuthManager.getMinifluxStatus().then(status => {
+            const statusEl = container.querySelector('#miniflux-status-value');
+            if (!statusEl) return;
+
+            if (status.connected) {
+                statusEl.innerHTML = `<span class="status-dot"></span>${i18n.t('settings.connected')} ${sourceText}`;
+            } else {
+                statusEl.className = 'miniflux-config-value miniflux-status-disconnected';
+                statusEl.style.color = 'var(--danger-color)';
+                statusEl.innerHTML = `<span class="status-dot" style="background-color: var(--danger-color);"></span>${i18n.t('auth.login_failed')}: ${status.error || 'Connection Invalid'}`;
+            }
+        }).catch(err => {
+            const statusEl = container.querySelector('#miniflux-status-value');
+            if (statusEl) {
+                statusEl.className = 'miniflux-config-value miniflux-status-disconnected';
+                statusEl.style.color = 'var(--danger-color)';
+                statusEl.innerHTML = `<span class="status-dot" style="background-color: var(--danger-color);"></span>Error: ${err.message}`;
+            }
+        });
+
+        if (!isEnv) {
+            container.querySelector('#edit-miniflux-config-btn')?.addEventListener('click', () => {
+                this._renderMinifluxConfigForm(container, config);
+            });
+        }
+    },
+
+    /**
+     * 渲染 Miniflux 配置表单
+     */
+    _renderMinifluxConfigForm(container, prefill = null) {
+        const isEditing = !!prefill;
+        const authType = prefill?.authType || 'basic';
+
+        container.innerHTML = `
+            <div class="miniflux-config-item">
+                <span class="miniflux-config-label">${i18n.t('settings.status')}</span>
+                <span class="miniflux-config-value miniflux-status-disconnected">
+                    <span class="status-dot"></span>${isEditing ? i18n.t('settings.editing') : i18n.t('settings.not_configured')}
+                </span>
+            </div>
+            <form id="miniflux-config-form" class="miniflux-config-form">
+                <label class="miniflux-input-label">${i18n.t('settings.miniflux_url')}</label>
+                <input type="text" id="miniflux-url" class="auth-input" placeholder="https://miniflux.example.com" style="margin-bottom: 12px;" value="${prefill?.url || ''}" required>
+                
+                <label class="miniflux-input-label">${i18n.t('settings.auth_method')}</label>
+                <div class="auth-type-selector" style="display:flex; gap:10px; margin-bottom:12px;">
+                    <button type="button" class="appearance-mode-btn ${authType === 'basic' ? 'active' : ''}" id="auth-type-basic" style="flex:1; justify-content:center;">${i18n.t('settings.auth_basic')}</button>
+                    <button type="button" class="appearance-mode-btn ${authType === 'api_key' ? 'active' : ''}" id="auth-type-apikey" style="flex:1; justify-content:center;">${i18n.t('settings.auth_api_key')}</button>
+                </div>
+
+                <div id="auth-fields-basic" style="${authType === 'basic' ? 'display:block' : 'display:none'}">
+                    <label class="miniflux-input-label">${i18n.t('settings.username_password')}</label>
+                    <input type="text" id="miniflux-username" class="auth-input" placeholder="admin" style="margin-bottom: 8px;" value="${prefill?.username || ''}">
+                    <input type="password" id="miniflux-password" class="auth-input" placeholder="${isEditing ? i18n.t('settings.enter_new_password') : '••••••••'}" style="margin-bottom: 12px;">
+                </div>
+
+                <div id="auth-fields-apikey" style="${authType === 'api_key' ? 'display:block' : 'display:none'}">
+                    <label class="miniflux-input-label">${i18n.t('settings.auth_api_key')}</label>
+                    <input type="password" id="miniflux-api-key" class="auth-input" placeholder="${i18n.t('settings.api_key_placeholder')}" style="margin-bottom: 12px;" value="${prefill?.apiKey || ''}" autocomplete="off">
+                </div>
+
+                <div class="appearance-mode-group">
+                    ${isEditing ? `<button type="button" id="miniflux-cancel-btn" class="appearance-mode-btn" style="flex: 1;">${i18n.t('common.cancel')}</button>` : ''}
+                    <button type="button" id="miniflux-test-btn" class="appearance-mode-btn" style="flex: 1;">${i18n.t('settings.test_connection')}</button>
+                    <button type="submit" class="appearance-mode-btn active" style="flex: 1;">${i18n.t('settings.save_config')}</button>
+                </div>
+                <div id="miniflux-config-msg" style="text-align: center; margin-top: 8px; font-size: 0.85em;"></div>
+            </form>
+        `;
+
+        this._bindMinifluxFormEvents(container, isEditing);
+    },
+
+    /**
+     * 绑定 Miniflux 配置表单事件
+     */
+    _bindMinifluxFormEvents(container, isEditing) {
+        const form = container.querySelector('#miniflux-config-form');
+        const testBtn = container.querySelector('#miniflux-test-btn');
+        const cancelBtn = container.querySelector('#miniflux-cancel-btn');
+        const msgEl = container.querySelector('#miniflux-config-msg');
+
+        const btnBasic = container.querySelector('#auth-type-basic');
+        const btnApiKey = container.querySelector('#auth-type-apikey');
+        const fieldsBasic = container.querySelector('#auth-fields-basic');
+        const fieldsApiKey = container.querySelector('#auth-fields-apikey');
+
+        let currentAuthType = btnBasic.classList.contains('active') ? 'basic' : 'api_key';
+
+        btnBasic.addEventListener('click', () => {
+            currentAuthType = 'basic';
+            btnBasic.classList.add('active');
+            btnApiKey.classList.remove('active');
+            fieldsBasic.style.display = 'block';
+            fieldsApiKey.style.display = 'none';
+        });
+
+        btnApiKey.addEventListener('click', () => {
+            currentAuthType = 'api_key';
+            btnBasic.classList.remove('active');
+            btnApiKey.classList.add('active');
+            fieldsBasic.style.display = 'none';
+            fieldsApiKey.style.display = 'block';
+        });
+
+        const getFormData = () => {
+            const urlInput = container.querySelector('#miniflux-url');
+            let url = urlInput.value.trim();
+            if (url && !url.match(/^https?:\/\//i)) url = 'https://' + url;
+            url = url.replace(/\/+$/, '');
+            urlInput.value = url;
+
+            if (currentAuthType === 'basic') {
+                return {
+                    url,
+                    username: container.querySelector('#miniflux-username').value.trim(),
+                    password: container.querySelector('#miniflux-password').value,
+                    authType: 'basic'
+                };
+            } else {
+                return {
+                    url,
+                    apiKey: container.querySelector('#miniflux-api-key').value.trim(),
+                    authType: 'api_key'
+                };
+            }
+        };
+
+        testBtn.addEventListener('click', async () => {
+            const data = getFormData();
+            if (!data.url || (data.authType === 'basic' && (!data.username || !data.password)) || (data.authType === 'api_key' && !data.apiKey)) {
+                msgEl.textContent = i18n.t('settings.fill_all_info');
+                msgEl.style.color = 'var(--danger-color)';
+                return;
+            }
+
+            testBtn.disabled = true;
+            testBtn.textContent = i18n.t('settings.testing');
+            msgEl.textContent = '';
+
+            try {
+                const result = await AuthManager.testMinifluxConnection(data.url, data.username, data.password, data.apiKey, data.authType);
+                msgEl.textContent = `✓ ${i18n.t('settings.connection_success')} (${result.user})`;
+                msgEl.style.color = 'var(--accent-color)';
+            } catch (err) {
+                msgEl.textContent = err.message;
+                msgEl.style.color = 'var(--danger-color)';
+            } finally {
+                testBtn.disabled = false;
+                testBtn.textContent = i18n.t('settings.test_connection');
+            }
+        });
+
+        cancelBtn?.addEventListener('click', async () => {
+            const config = await AuthManager.getMinifluxConfig();
+            this._renderMinifluxConfigured(container, config);
+        });
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const data = getFormData();
+            if (data.authType === 'basic' && !data.password) {
+                msgEl.textContent = i18n.t('settings.fill_all_info');
+                msgEl.style.color = 'var(--danger-color)';
+                return;
+            }
+
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            submitBtn.textContent = i18n.t('settings.saving');
+
+            try {
+                await AuthManager.saveMinifluxConfig(data.url, data.username, data.password, data.apiKey, data.authType);
+                msgEl.textContent = `✓ ${i18n.t('settings.save_success_refresh')}`;
+                msgEl.style.color = 'var(--accent-color)';
+                setTimeout(() => window.location.reload(), 1000);
+            } catch (err) {
+                msgEl.textContent = err.message;
+                msgEl.style.color = 'var(--danger-color)';
+                submitBtn.disabled = false;
+                submitBtn.textContent = i18n.t('settings.save_config');
             }
         });
     }

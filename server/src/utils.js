@@ -1,6 +1,77 @@
+import sanitizeHtml from 'sanitize-html';
+
 /**
  * 工具函数模块
  */
+
+// --- 常量定义 ---
+const MIN_IMAGE_DIMENSION = 100;
+
+// 需要屏蔽的图片模式
+const BLOCKED_PATTERNS = [
+    'grey-placeholder.png',
+    'placeholder',
+    'spacer.gif',
+    'blank.gif',
+    'pixel.gif',
+    'tracking',
+    'analytics',
+    '1x1',
+    'beacon'
+];
+
+// 正则表达式提升至模块级以避免重复编译
+const RE_HTML_ENTITIES = {
+    lt: /&lt;/g,
+    gt: /&gt;/g,
+    quot: /&quot;/g,
+    apos: /&#39;/g,
+    amp: /&amp;/g
+};
+
+const IMG_TAG_REGEX = /<img\s+([^>]+)>/gi;
+const SRC_REGEX = /src\s*=\s*["']([^"']+)["']/i;
+const DATA_SRC_REGEX = /data-src\s*=\s*["']([^"']+)["']/i;
+const WIDTH_REGEX = /width\s*=\s*["']?(\d+)["']?/i;
+const HEIGHT_REGEX = /height\s*=\s*["']?(\d+)["']?/i;
+const FIGURE_PICTURE_REGEX = /<(?:figure|picture)[^>]*>.*?<img[^>]+src\s*=\s*["']([^"']+)["']/is;
+const SRCSET_REGEX = /srcset\s*=\s*["']([^\s"']+)/i;
+const RAW_URL_REGEX = /(https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|gif|webp))/gi;
+
+/**
+ * 解码 HTML 实体
+ */
+function decodeHtml(html) {
+    if (!html) return '';
+    return html
+        .replace(RE_HTML_ENTITIES.lt, '<')
+        .replace(RE_HTML_ENTITIES.gt, '>')
+        .replace(RE_HTML_ENTITIES.quot, '"')
+        .replace(RE_HTML_ENTITIES.apos, "'")
+        .replace(RE_HTML_ENTITIES.amp, '&');
+}
+
+/**
+ * 检查图片是否被屏蔽
+ */
+function isBlocked(url) {
+    if (!url) return true;
+    const lowerUrl = url.toLowerCase();
+    return BLOCKED_PATTERNS.some(pattern => lowerUrl.includes(pattern));
+}
+
+/**
+ * 检查图片尺寸是否过小
+ */
+function isTooSmall(attrs) {
+    const widthMatch = attrs.match(WIDTH_REGEX);
+    const heightMatch = attrs.match(HEIGHT_REGEX);
+
+    if (widthMatch && parseInt(widthMatch[1]) < MIN_IMAGE_DIMENSION) return true;
+    if (heightMatch && parseInt(heightMatch[1]) < MIN_IMAGE_DIMENSION) return true;
+
+    return false;
+}
 
 /**
  * 从 HTML 内容中提取第一张有效图片的 URL
@@ -10,58 +81,21 @@
 export function extractFirstImage(htmlContent) {
     if (!htmlContent) return null;
 
-    // 解码 HTML 实体
-    const decoded = htmlContent
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&amp;/g, '&');
-
-    // 检查是否是需要屏蔽的图片
-    const blockedPatterns = [
-        'grey-placeholder.png',
-        'placeholder',
-        'spacer.gif',
-        'blank.gif',
-        'pixel.gif',
-        'tracking',
-        'analytics',
-        '1x1',
-        'beacon'
-    ];
-
-    const isBlocked = (url) => {
-        if (!url) return true;
-        const lowerUrl = url.toLowerCase();
-        return blockedPatterns.some(pattern => lowerUrl.includes(pattern));
-    };
-
-    // 检查图片尺寸是否过小
-    const isTooSmall = (attrs) => {
-        const widthMatch = attrs.match(/width\s*=\s*["']?(\d+)["']?/i);
-        const heightMatch = attrs.match(/height\s*=\s*["']?(\d+)["']?/i);
-
-        if (widthMatch && parseInt(widthMatch[1]) < 100) return true;
-        if (heightMatch && parseInt(heightMatch[1]) < 100) return true;
-
-        return false;
-    };
-
-    // 1. 尝试匹配完整的 img 标签
-    const imgTagRegex = /<img\s+([^>]+)>/gi;
+    const decoded = decodeHtml(htmlContent);
     let match;
 
-    while ((match = imgTagRegex.exec(decoded)) !== null) {
+    // 1. 尝试匹配完整的 img 标签
+    IMG_TAG_REGEX.lastIndex = 0; // 重置全局正则状态
+    while ((match = IMG_TAG_REGEX.exec(decoded)) !== null) {
         const attrs = match[1];
 
         // 提取 src
-        let urlMatch = attrs.match(/src\s*=\s*["']([^"']+)["']/i);
+        let urlMatch = attrs.match(SRC_REGEX);
         let url = urlMatch ? urlMatch[1] : null;
 
         // 如果没有 src，尝试 data-src
         if (!url) {
-            urlMatch = attrs.match(/data-src\s*=\s*["']([^"']+)["']/i);
+            urlMatch = attrs.match(DATA_SRC_REGEX);
             url = urlMatch ? urlMatch[1] : null;
         }
 
@@ -71,20 +105,20 @@ export function extractFirstImage(htmlContent) {
     }
 
     // 2. 尝试匹配 figure/picture 中的图片
-    match = decoded.match(/<(?:figure|picture)[^>]*>.*?<img[^>]+src\s*=\s*["']([^"']+)["']/is);
+    match = decoded.match(FIGURE_PICTURE_REGEX);
     if (match && match[1] && !match[1].startsWith('data:') && !isBlocked(match[1])) {
         return match[1];
     }
 
     // 3. 尝试匹配 srcset 中的第一个 URL
-    match = decoded.match(/srcset\s*=\s*["']([^\s"']+)/i);
+    match = decoded.match(SRCSET_REGEX);
     if (match && match[1] && !isBlocked(match[1])) {
         return match[1];
     }
 
     // 4. 尝试匹配独立的图片 URL
-    const urlRegex = /(https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|gif|webp))/gi;
-    while ((match = urlRegex.exec(decoded)) !== null) {
+    RAW_URL_REGEX.lastIndex = 0;
+    while ((match = RAW_URL_REGEX.exec(decoded)) !== null) {
         const url = match[1];
         if (url && !isBlocked(url)) {
             return url;
@@ -96,31 +130,21 @@ export function extractFirstImage(htmlContent) {
 
 /**
  * 将原始图片 URL 转换为压缩后的缩略图 URL
- * 使用 wsrv.nl 图片代理服务
  * @param {string} originalUrl - 原始图片 URL
  * @returns {string|null} - 缩略图 URL 或 null
  */
 export function getThumbnailUrl(originalUrl) {
-    if (!originalUrl) return null;
-
-    // 跳过 data: URL
-    if (originalUrl.startsWith('data:')) return null;
-
-    // 返回本地代理 URL，预设好尺寸参数
-    // const encodedUrl = encodeURIComponent(originalUrl);
-    // return `/api/proxy/image?url=${encodedUrl}&w=130&h=130`;
-
+    if (!originalUrl || originalUrl.startsWith('data:')) return null;
     // 直接返回原始 URL，由前端负责加载（减轻服务器压力）
     return originalUrl;
 }
 
 /**
  * 从 RSS 文章内容中提取并生成缩略图 URL
- * @param {string} content - 文章内容
- * @param {string} summary - 文章摘要
- * @returns {string|null} - 缩略图 URL 或 null
  */
 export function extractThumbnailUrl(content, summary) {
     const imageUrl = extractFirstImage(content || summary || '');
     return getThumbnailUrl(imageUrl);
 }
+
+export { sanitizeHtml };

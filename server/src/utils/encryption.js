@@ -1,8 +1,12 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import { fileURLToPath } from 'url';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data');
 const KEY_FILE = path.join(DATA_DIR, '.encryption-key');
 
 // Ensure data directory exists
@@ -10,27 +14,39 @@ if (!fs.existsSync(DATA_DIR)) {
     fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// 获取或生成加密密钥
-function getEncryptionKey() {
+// Cached encryption key (Buffer) - loaded once, reused forever
+let cachedKeyBuffer = null;
+
+// 获取或生成加密密钥 (缓存版本)
+function getEncryptionKeyBuffer() {
+    if (cachedKeyBuffer) {
+        return cachedKeyBuffer;
+    }
+
+    let keyHex;
     if (fs.existsSync(KEY_FILE)) {
-        return fs.readFileSync(KEY_FILE, 'utf8').trim();
+        keyHex = fs.readFileSync(KEY_FILE, 'utf8').trim();
+    } else {
+        // 生成新的 256 位密钥
+        keyHex = crypto.randomBytes(32).toString('hex');
+        try {
+            fs.writeFileSync(KEY_FILE, keyHex, { mode: 0o600 }); // 只有所有者可读写
+        } catch (error) {
+            console.error('Error writing encryption key:', error);
+            throw new Error('Failed to persist encryption key. Cannot proceed safely.');
+        }
     }
-    // 生成新的 256 位密钥
-    const key = crypto.randomBytes(32).toString('hex');
-    try {
-        fs.writeFileSync(KEY_FILE, key, { mode: 0o600 }); // 只有所有者可读写
-    } catch (error) {
-        console.error('Error writing encryption key:', error);
-        throw new Error('Failed to persist encryption key. Cannot proceed safely.');
-    }
-    return key;
+
+    // Cache as Buffer to avoid repeated conversion
+    cachedKeyBuffer = Buffer.from(keyHex, 'hex');
+    return cachedKeyBuffer;
 }
 
 // 加密
 export function encrypt(text) {
     if (!text) return null;
     try {
-        const key = Buffer.from(getEncryptionKey(), 'hex');
+        const key = getEncryptionKeyBuffer();
         const iv = crypto.randomBytes(16);
         const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
 
@@ -54,7 +70,7 @@ export function encrypt(text) {
 export function decrypt(encrypted) {
     if (!encrypted) return null;
     try {
-        const key = Buffer.from(getEncryptionKey(), 'hex');
+        const key = getEncryptionKeyBuffer();
         const iv = Buffer.from(encrypted.iv, 'hex');
         const authTag = Buffer.from(encrypted.authTag, 'hex');
 

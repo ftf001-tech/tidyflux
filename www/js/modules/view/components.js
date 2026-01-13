@@ -11,198 +11,161 @@ export class Modal {
      * @param {string} [title] 
      * @returns {Promise<void>}
      */
-    static alert(message, title = '') {
+    /**
+     * Internal common dialog renderer
+     * @private
+     */
+    static _renderDialog({ title, body, footer, onReady }) {
         return new Promise((resolve) => {
             const { dialog, close } = createDialog('custom-modal-dialog', `
                 <div class="custom-modal-content">
                     ${title ? `<div class="custom-modal-header">${title}</div>` : ''}
-                    <div class="custom-modal-body"><p>${message}</p></div>
-                    <div class="custom-modal-footer">
-                        <button class="appearance-mode-btn active ok-btn" style="padding: 8px 20px;">${i18n.t('common.ok') || 'OK'}</button>
-                    </div>
+                    <div class="custom-modal-body">${body}</div>
+                    <div class="custom-modal-footer">${footer}</div>
                 </div>
             `);
 
-            const okBtn = dialog.querySelector('.ok-btn');
-            const handleClose = () => {
+            const finalize = (result) => {
                 close();
-                resolve();
+                resolve(result);
             };
 
-            okBtn.addEventListener('click', handleClose);
+            if (onReady) onReady(dialog, finalize);
+        });
+    }
 
+    /**
+     * Show an alert dialog
+     */
+    static alert(message, title = '') {
+        return this._renderDialog({
+            title,
+            body: `<p>${message}</p>`,
+            footer: `<button class="appearance-mode-btn active ok-btn padded">${i18n.t('common.ok') || 'OK'}</button>`,
+            onReady: (dialog, finalize) => {
+                const okBtn = dialog.querySelector('.ok-btn');
+                okBtn.addEventListener('click', () => finalize());
 
-
-            const keyHandler = (e) => {
-                if (e.key === 'Enter' || e.key === 'Escape') {
-                    handleClose();
-                    document.removeEventListener('keydown', keyHandler);
-                }
-            };
-            document.addEventListener('keydown', keyHandler);
-
-
+                const keyHandler = (e) => {
+                    if (e.key === 'Enter' || e.key === 'Escape') {
+                        finalize();
+                        document.removeEventListener('keydown', keyHandler);
+                    }
+                };
+                document.addEventListener('keydown', keyHandler);
+            }
         });
     }
 
     /**
      * Show an alert dialog with a "Go to Settings" button
-     * @param {string} message 
-     * @param {string} settingsLabel
-     * @param {Function} onSettings
-     * @param {string} [title] 
-     * @returns {Promise<void>}
      */
     static alertWithSettings(message, settingsLabel, onSettings, title = '') {
-        return new Promise((resolve) => {
-            const { dialog, close } = createDialog('custom-modal-dialog', `
-                <div class="custom-modal-content">
-                    ${title ? `<div class="custom-modal-header">${title}</div>` : ''}
-                    <div class="custom-modal-body"><p>${message}</p></div>
-                    <div class="custom-modal-footer">
-                        <button class="appearance-mode-btn settings-btn" style="margin-right: 8px;">${settingsLabel}</button>
-                        <button class="appearance-mode-btn active ok-btn" style="padding: 8px 20px;">${i18n.t('common.ok') || 'OK'}</button>
-                    </div>
-                </div>
-            `);
+        return this._renderDialog({
+            title,
+            body: `<p>${message}</p>`,
+            footer: `
+                <button class="appearance-mode-btn settings-btn m-right-8">${settingsLabel}</button>
+                <button class="appearance-mode-btn active ok-btn padded">${i18n.t('common.ok') || 'OK'}</button>
+            `,
+            onReady: (dialog, finalize) => {
+                const okBtn = dialog.querySelector('.ok-btn');
+                const settingsBtn = dialog.querySelector('.settings-btn');
 
-            const okBtn = dialog.querySelector('.ok-btn');
-            const settingsBtn = dialog.querySelector('.settings-btn');
+                okBtn.addEventListener('click', () => finalize());
+                settingsBtn.addEventListener('click', () => {
+                    finalize();
+                    if (onSettings) onSettings();
+                });
 
-            const handleClose = () => {
-                close();
-                resolve();
-            };
-
-            okBtn.addEventListener('click', handleClose);
-
-            settingsBtn.addEventListener('click', () => {
-                close();
-                resolve();
-                if (onSettings) onSettings();
-            });
-
-            const keyHandler = (e) => {
-                if (e.key === 'Enter' || e.key === 'Escape') {
-                    handleClose();
-                    document.removeEventListener('keydown', keyHandler);
-                }
-            };
-            document.addEventListener('keydown', keyHandler);
+                const keyHandler = (e) => {
+                    if (e.key === 'Enter' || e.key === 'Escape') {
+                        finalize();
+                        document.removeEventListener('keydown', keyHandler);
+                    }
+                };
+                document.addEventListener('keydown', keyHandler);
+            }
         });
     }
 
     /**
      * Show a confirm dialog
-     * @param {string} message 
-     * @param {string} [title] 
-     * @returns {Promise<boolean>}
      */
     static confirm(message, title = '') {
-        return new Promise((resolve) => {
-            let resolved = false;
-            const { dialog, close } = createDialog('custom-modal-dialog', `
-                <div class="custom-modal-content">
-                    ${title ? `<div class="custom-modal-header">${title}</div>` : ''}
-                    <div class="custom-modal-body"><p>${message}</p></div>
-                    <div class="custom-modal-footer">
-                        <button class="appearance-mode-btn cancel-btn">${i18n.t('common.cancel') || 'Cancel'}</button>
-                        <button class="appearance-mode-btn active confirm-btn" style="background: var(--accent-color); color: white;">${i18n.t('common.confirm') || 'Confirm'}</button>
-                    </div>
-                </div>
-            `);
+        return this._renderDialog({
+            title,
+            body: `<p>${message}</p>`,
+            footer: `
+                <button class="appearance-mode-btn cancel-btn">${i18n.t('common.cancel') || 'Cancel'}</button>
+                <button class="appearance-mode-btn active confirm-btn btn-danger">${i18n.t('common.confirm') || 'Confirm'}</button>
+            `,
+            onReady: (dialog, finalize) => {
+                const confirmBtn = dialog.querySelector('.confirm-btn');
+                const cancelBtn = dialog.querySelector('.cancel-btn');
 
-            const confirmBtn = dialog.querySelector('.confirm-btn');
-            const cancelBtn = dialog.querySelector('.cancel-btn');
+                confirmBtn.addEventListener('click', () => finalize(true));
+                cancelBtn.addEventListener('click', () => finalize(false));
 
-            const finalize = (result) => {
-                if (resolved) return;
-                resolved = true;
-                close();
-                resolve(result);
-            };
+                const keyHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        finalize(false);
+                        document.removeEventListener('keydown', keyHandler);
+                    } else if (e.key === 'Enter') {
+                        finalize(true);
+                        document.removeEventListener('keydown', keyHandler);
+                    }
+                };
+                document.addEventListener('keydown', keyHandler);
 
-            confirmBtn.addEventListener('click', () => finalize(true));
-            cancelBtn.addEventListener('click', () => finalize(false));
-
-            // Handle Esc -> Cancel
-            const keyHandler = (e) => {
-                if (resolved) return;
-                if (e.key === 'Escape') {
-                    finalize(false);
-                } else if (e.key === 'Enter') {
-                    finalize(true);
-                }
-            };
-            document.addEventListener('keydown', keyHandler);
-
-            // If the user clicks outside (handled by createDialog), we need to detect it.
-            // We can add a click listener to the dialog wrapper (background) passed by createDialog.
-            dialog.addEventListener('click', (e) => {
-                if (e.target === dialog) {
-                    finalize(false);
-                }
-            });
+                dialog.addEventListener('click', (e) => {
+                    if (e.target === dialog) finalize(false);
+                });
+            }
         });
     }
 
     /**
      * Show a prompt dialog
-     * @param {string} message 
-     * @param {string} [defaultValue] 
-     * @param {string} [title] 
-     * @returns {Promise<string|null>} null if cancelled
      */
     static prompt(message, defaultValue = '', title = '') {
-        return new Promise((resolve) => {
-            let resolved = false;
-            const { dialog, close } = createDialog('custom-modal-dialog', `
-                <div class="custom-modal-content">
-                    ${title ? `<div class="custom-modal-header">${title}</div>` : ''}
-                    <div class="custom-modal-body">
-                        <p>${message}</p>
-                        <input type="text" class="custom-modal-input" value="${defaultValue}" />
-                    </div>
-                    <div class="custom-modal-footer">
-                        <button class="appearance-mode-btn cancel-btn">${i18n.t('common.cancel') || 'Cancel'}</button>
-                        <button class="appearance-mode-btn active confirm-btn" style="background: var(--accent-color); color: white;">${i18n.t('common.confirm') || 'OK'}</button>
-                    </div>
-                </div>
-            `);
+        return this._renderDialog({
+            title,
+            body: `
+                <p>${message}</p>
+                <input type="text" class="custom-modal-input" value="${defaultValue}" />
+            `,
+            footer: `
+                <button class="appearance-mode-btn cancel-btn">${i18n.t('common.cancel') || 'Cancel'}</button>
+                <button class="appearance-mode-btn active confirm-btn btn-danger">${i18n.t('common.confirm') || 'OK'}</button>
+            `,
+            onReady: (dialog, finalize) => {
+                const input = dialog.querySelector('input');
+                const confirmBtn = dialog.querySelector('.confirm-btn');
+                const cancelBtn = dialog.querySelector('.cancel-btn');
 
-            const input = dialog.querySelector('input');
-            const confirmBtn = dialog.querySelector('.confirm-btn');
-            const cancelBtn = dialog.querySelector('.cancel-btn');
+                input.select();
+                input.focus();
 
-            input.select();
-            input.focus();
+                confirmBtn.addEventListener('click', () => finalize(input.value));
+                cancelBtn.addEventListener('click', () => finalize(null));
 
-            const finalize = (result) => {
-                if (resolved) return;
-                resolved = true;
-                close();
-                resolve(result);
-            };
+                dialog.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') finalize(input.value);
+                });
 
-            confirmBtn.addEventListener('click', () => finalize(input.value));
-            cancelBtn.addEventListener('click', () => finalize(null));
+                const escHandler = (e) => {
+                    if (e.key === 'Escape') {
+                        finalize(null);
+                        document.removeEventListener('keydown', escHandler);
+                    }
+                };
+                document.addEventListener('keydown', escHandler);
 
-
-            // Use keyup or keydown? keydown is better but ensure we don't capture global shortcuts unwantedly.
-            // We attach to input specifically for Enter? No, dialog-wide.
-            dialog.addEventListener('keydown', (e) => {
-                if (e.key === 'Enter') finalize(input.value);
-            });
-            // Global escape
-            document.addEventListener('keydown', (e) => {
-                if (e.key === 'Escape') finalize(null);
-            });
-
-            dialog.addEventListener('click', (e) => {
-                if (e.target === dialog) {
-                    finalize(null);
-                }
-            });
+                dialog.addEventListener('click', (e) => {
+                    if (e.target === dialog) finalize(null);
+                });
+            }
         });
     }
 }
@@ -228,20 +191,28 @@ export class CustomSelect {
         this.wrapper.className = 'custom-select-wrapper';
         this.nativeSelect.parentNode.insertBefore(this.wrapper, this.nativeSelect);
         this.wrapper.appendChild(this.nativeSelect);
-
-
-
         // Create Trigger
         this.trigger = document.createElement('div');
         this.trigger.className = 'custom-select-trigger';
         // Add tabindex for keyboard focus
         this.trigger.setAttribute('tabindex', '0');
         this.wrapper.appendChild(this.trigger);
-
         // Create Options List
         this.optionsList = document.createElement('div');
         this.optionsList.className = 'custom-select-options';
         this.wrapper.appendChild(this.optionsList);
+
+        // Event Delegation for options
+        this.optionsList.addEventListener('click', (e) => {
+            const optionEl = e.target.closest('.custom-select-option');
+            if (optionEl) {
+                e.stopPropagation();
+                // Ensure the value exists in dataset
+                if ('value' in optionEl.dataset) {
+                    this.select(optionEl.dataset.value);
+                }
+            }
+        });
 
         // Populate
         this.refresh();
@@ -285,10 +256,9 @@ export class CustomSelect {
             el.textContent = opt.textContent;
             el.dataset.value = opt.value;
 
-            el.addEventListener('click', (e) => {
-                e.stopPropagation();
-                this.select(opt.value);
-            });
+            el.textContent = opt.textContent;
+            el.dataset.value = opt.value;
+            // Event listener removed in favor of delegation
 
             this.optionsList.appendChild(el);
         });
@@ -330,8 +300,12 @@ export class CustomSelect {
     }
 
     open() {
-        // Close other custom selects
-        document.querySelectorAll('.custom-select-wrapper.open').forEach(el => el.classList.remove('open'));
+        // Close other custom selects efficiently
+        if (CustomSelect.activeInstance && CustomSelect.activeInstance !== this) {
+            CustomSelect.activeInstance.close();
+        }
+        CustomSelect.activeInstance = this;
+
         this.wrapper.classList.add('open');
         this.trigger.classList.add('open');
     }
@@ -339,6 +313,9 @@ export class CustomSelect {
     close() {
         this.wrapper.classList.remove('open');
         this.trigger.classList.remove('open');
+        if (CustomSelect.activeInstance === this) {
+            CustomSelect.activeInstance = null;
+        }
     }
 
     /**

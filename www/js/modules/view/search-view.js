@@ -1,13 +1,19 @@
-/**
- * SearchView - 搜索视图模块
- * @module view/search-view
- */
-
 import { FeedManager } from '../feed-manager.js';
 import { i18n } from '../i18n.js';
 import { AppState } from '../../state.js';
 import { DOMElements } from '../../dom.js';
 import { ArticlesView } from './articles-view.js';
+import { Icons } from '../icons.js';
+
+/**
+ * 搜索功能常量配置
+ */
+const SEARCH_CONFIG = {
+    PAGINATION_LIMIT: 50,      // 搜索结果分页限制
+    TRANSITION_DELAY_MS: 200,  // 动画过渡延迟
+    FOCUS_DELAY_MS: 50,        // 自动聚焦延迟
+    CALIBRATION_DELAY_MS: 50   // 滚动校准延迟
+};
 
 /**
  * 搜索状态
@@ -21,6 +27,7 @@ const searchState = {
     isSearching: false,
     scrollHandler: null
 };
+
 
 /**
  * 搜索视图管理
@@ -62,14 +69,10 @@ export const SearchView = {
         searchBox.innerHTML = `
             <input type="text" id="inline-search-input" placeholder="${i18n.t('nav.search_placeholder')}" autofocus>
             <button class="search-confirm-btn" title="${i18n.t('common.search')}">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                    <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                </svg>
+                ${Icons.search}
             </button>
             <button class="search-cancel-btn" title="${i18n.t('common.cancel')}">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
+                ${Icons.close}
             </button>
         `;
 
@@ -99,7 +102,7 @@ export const SearchView = {
         // 4. 备用聚焦策略
         setTimeout(() => {
             if (document.activeElement !== input) input.focus();
-        }, 50);
+        }, SEARCH_CONFIG.FOCUS_DELAY_MS);
 
         const close = () => {
             overlay.classList.remove('active');
@@ -107,7 +110,7 @@ export const SearchView = {
             setTimeout(() => {
                 overlay.remove();
                 searchBox.remove();
-            }, 200);
+            }, SEARCH_CONFIG.TRANSITION_DELAY_MS);
         };
 
         const performSearch = async () => {
@@ -127,14 +130,13 @@ export const SearchView = {
             history.replaceState(null, '', `#/search?q=${encodeURIComponent(query)}`);
 
             // 更新标题
-            // 更新标题
             this.updateSearchTitle(query);
 
             // 清除侧边栏选中状态
             document.querySelectorAll('.nav-item, .feed-item, .feed-item-btn, .feed-group-name').forEach(el => el.classList.remove('active'));
 
             // 显示加载状态
-            DOMElements.articlesList.innerHTML = `<div class="loading">${i18n.t('app.searching')}</div>`;
+            DOMElements.articlesList.innerHTML = `<div class="loading">${i18n.t('common.searching')}</div>`;
 
             // 清理虚拟列表
             if (ArticlesView.virtualList) {
@@ -157,19 +159,17 @@ export const SearchView = {
                 AppState.articles = articles;
                 AppState.pagination = {
                     page: 1,
-                    limit: 50,
+                    limit: SEARCH_CONFIG.PAGINATION_LIMIT,
                     total: searchState.total,
                     hasMore: searchState.hasMore,
-                    totalPages: Math.ceil(searchState.total / 50)
+                    totalPages: Math.ceil(searchState.total / SEARCH_CONFIG.PAGINATION_LIMIT)
                 };
 
                 // 渲染结果
                 if (articles.length === 0) {
                     DOMElements.articlesList.innerHTML = `
                         <div class="empty-content" style="flex-direction: column; gap: 8px;">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48" style="opacity: 0.3;">
-                                <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                            </svg>
+                            ${Icons.search_large}
                             <p>${i18n.t('article.no_results')}</p>
                         </div>
                     `;
@@ -179,7 +179,7 @@ export const SearchView = {
                 }
             } catch (error) {
                 console.error('Search error:', error);
-                DOMElements.articlesList.innerHTML = `<div class="error-msg">${i18n.t('app.search_failed')}</div>`;
+                DOMElements.articlesList.innerHTML = `<div class="error-msg">${i18n.t('common.search_failed')}</div>`;
             }
         };
 
@@ -218,9 +218,7 @@ export const SearchView = {
         DOMElements.currentFeedTitle.innerHTML = `
             ${i18n.t('common.search')}: <span class="search-query-text">${query}</span>
             <button id="exit-search-btn" class="icon-btn" style="margin-left: 8px; width: 24px; height: 24px; min-width: 24px; display: inline-flex; align-items: center; justify-content: center; vertical-align: middle; padding: 0; background: none; border: none; cursor: pointer; color: inherit; opacity: 0.7;" title="${i18n.t('common.close')}">
-                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
+                ${Icons.close}
             </button>
         `;
 
@@ -249,7 +247,6 @@ export const SearchView = {
         AppState.currentGroupId = null;
         AppState.viewingFavorites = false;
 
-        // 更新标题
         // 更新标题
         this.updateSearchTitle(query);
 
@@ -287,13 +284,13 @@ export const SearchView = {
                     } else if (DOMElements.articlesList) {
                         DOMElements.articlesList.scrollTop = AppState.lastListViewScrollTop;
                     }
-                }, 50);
+                }, SEARCH_CONFIG.CALIBRATION_DELAY_MS);
             }
             return;
         }
 
         // 显示加载状态
-        DOMElements.articlesList.innerHTML = `<div class="loading">${i18n.t('app.searching')}</div>`;
+        DOMElements.articlesList.innerHTML = `<div class="loading">${i18n.t('common.searching')}</div>`;
 
         // 清理虚拟列表
         if (ArticlesView.virtualList) {
@@ -316,19 +313,17 @@ export const SearchView = {
             AppState.articles = articles;
             AppState.pagination = {
                 page: 1,
-                limit: 50,
+                limit: SEARCH_CONFIG.PAGINATION_LIMIT,
                 total: searchState.total,
                 hasMore: searchState.hasMore,
-                totalPages: Math.ceil(searchState.total / 50)
+                totalPages: Math.ceil(searchState.total / SEARCH_CONFIG.PAGINATION_LIMIT)
             };
 
             // 渲染结果
             if (articles.length === 0) {
                 DOMElements.articlesList.innerHTML = `
                     <div class="empty-content" style="flex-direction: column; gap: 8px;">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="48" height="48" style="opacity: 0.3;">
-                            <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                        </svg>
+                    ${Icons.search_large}
                         <p>${i18n.t('article.no_results')}</p>
                     </div>
                 `;
@@ -337,7 +332,7 @@ export const SearchView = {
             }
         } catch (error) {
             console.error('Search restore error:', error);
-            DOMElements.articlesList.innerHTML = `<div class="error-msg">${i18n.t('app.search_failed')}</div>`;
+            DOMElements.articlesList.innerHTML = `<div class="error-msg">${i18n.t('common.search_failed')}</div>`;
         }
     },
 

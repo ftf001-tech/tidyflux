@@ -38,17 +38,17 @@ export const DigestView = {
             return;
         }
 
-        // 显示生成中的提示
-        showToast(i18n.t('digest.generating'), 30000, true);
+        // 显示正在生成提示 (长连接，提示用户稍后查看)
+        showToast(i18n.t('digest.generating'), 5000, true);
 
         try {
             const aiConfig = AIService.getConfig();
-            const token = AuthManager.getToken();
 
-            const response = await AuthManager.fetchWithAuth('/api/digest/generate', {
+            const response = await AuthManager.fetchWithAuth('/api/digest/generate?stream=true', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Accept': 'text/event-stream'
                 },
                 body: JSON.stringify({
                     scope,
@@ -56,48 +56,88 @@ export const DigestView = {
                     groupId,
                     hours: 12,
                     targetLang: AIService.getLanguageName(aiConfig.targetLang || 'zh-CN'),
-                    prompt: aiConfig.digestPrompt,
-                    // aiConfig is now loaded from server side for security and consistency
+                    prompt: aiConfig.digestPrompt
                 })
             });
 
-            const data = await response.json();
-
             if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
                 throw new Error(data.error || i18n.t('digest.error'));
             }
 
-            // 隐藏加载提示
-            showToast(i18n.t('digest.generated') || '简报生成成功', 2000, false);
+            // 处理 SSE 流
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
 
-            // 将新简报添加到列表并跳转
-            if (data.digest && data.digest.id) {
-                // ... (existing code for success) 
-                // 导入 AppState
-                const { AppState } = await import('../../state.js');
+            try {
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
 
-                // 清空文章列表，这样返回时会重新加载（包含新简报）
-                AppState.articles = [];
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
 
-                // 构建带上下文的跳转链接
-                const params = new URLSearchParams();
-                if (feedId) params.set('feed', feedId);
-                if (groupId) params.set('group', groupId);
-                const queryString = params.toString();
-                const hash = queryString
-                    ? `#/article/${data.digest.id}?${queryString}`
-                    : `#/article/${data.digest.id}`;
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6).trim();
+                            if (!dataStr) continue;
 
-                // 跳转到简报详情页
-                window.location.hash = hash;
-            } else {
-                // 没有生成的简报（通常是因为没有未读文章）
-                showToast(data.digest?.content || i18n.t('digest.no_articles') || '该时间段内没有未读文章', 3000, false);
+                            try {
+                                const event = JSON.parse(dataStr);
+
+                                if (event.type === 'error') {
+                                    throw new Error(event.data?.error || i18n.t('digest.error'));
+                                }
+
+                                if (event.type === 'result') {
+                                    const { digest } = event.data;
+
+                                    if (digest && digest.id) {
+                                        // 成功生成，显示可交互 Toast
+
+                                        // 标记列表强制刷新，以便下次进入列表时重新加载（显示新简报）
+                                        // 不要直接清空 AppState.articles，否则会导致当前显示的列表突然清空
+                                        if (this.viewManager) {
+                                            this.viewManager.forceRefreshList = true;
+                                        }
+
+                                        // 构建跳转链接
+                                        const params = new URLSearchParams();
+                                        if (feedId) params.set('feed', feedId);
+                                        if (groupId) params.set('group', groupId);
+                                        const queryString = params.toString();
+                                        const hash = queryString
+                                            ? `#/article/${digest.id}?${queryString}`
+                                            : `#/article/${digest.id}`;
+
+                                        showToast(i18n.t('digest.success'), 15000, false, () => {
+                                            window.location.hash = hash;
+                                        });
+                                    } else {
+                                        // 无内容
+                                        showToast(digest?.content || i18n.t('digest.no_articles', { hours: 12 }), 5000, false);
+                                    }
+                                }
+                            } catch (e) {
+                                if (e.message && e.message !== 'Unexpected end of JSON input') {
+                                    throw e;
+                                }
+                            }
+                        }
+                    }
+                }
+            } finally {
+                reader.releaseLock();
             }
 
         } catch (error) {
             console.error('Generate digest error:', error);
-            await Modal.alert(error.message || i18n.t('digest.error'));
+            // 只有明显错误才弹窗，避免干扰
+            if (error.name !== 'AbortError') {
+                showToast(error.message || i18n.t('digest.error'), 5000, false);
+            }
         }
     },
 

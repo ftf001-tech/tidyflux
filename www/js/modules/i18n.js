@@ -1,13 +1,13 @@
-
 import en from '../locales/en.js';
 import zh from '../locales/zh.js';
+import { STORAGE_KEYS } from '../constants.js';
 
 class I18n {
     constructor() {
         this.translations = { en, zh };
 
         // Priority: 1. Saved preference, 2. System language, 3. Default (zh)
-        const savedLocale = localStorage.getItem('app_language');
+        const savedLocale = localStorage.getItem(STORAGE_KEYS.LOCALE);
         if (savedLocale && this.translations[savedLocale]) {
             this.locale = savedLocale;
         } else {
@@ -23,32 +23,34 @@ class I18n {
     set locale(lang) {
         if (this.translations[lang]) {
             this._locale = lang;
-            localStorage.setItem('app_language', lang);
+            localStorage.setItem(STORAGE_KEYS.LOCALE, lang);
             document.documentElement.lang = lang;
         }
     }
 
     t(key, params = {}) {
+        if (!key || typeof key !== 'string') return key || '';
         const keys = key.split('.');
-        let value = this.translations[this.locale];
-
-        for (const k of keys) {
-            value = value ? value[k] : undefined;
-        }
+        let value = this._getNestedValue(this.translations[this.locale], keys);
 
         if (value === undefined) {
             // Fallback to English if not found in current locale
             if (this.locale !== 'en') {
-                let fallbackValue = this.translations['en'];
-                for (const k of keys) {
-                    fallbackValue = fallbackValue ? fallbackValue[k] : undefined;
-                }
+                const fallbackValue = this._getNestedValue(this.translations['en'], keys);
                 if (fallbackValue !== undefined) return this._interpolate(fallbackValue, params);
             }
             return key;
         }
 
         return this._interpolate(value, params);
+    }
+
+    _getNestedValue(obj, keys) {
+        let value = obj;
+        for (const k of keys) {
+            value = value ? value[k] : undefined;
+        }
+        return value;
     }
 
     _interpolate(str, params) {

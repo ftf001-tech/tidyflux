@@ -1,9 +1,27 @@
 export default {
     title: 'Tidyflux',
-    loading: '加载中...',
-    searching: '搜索中...',
-    search_failed: '搜索失败',
     welcome: '选择一篇文章开始阅读',
+    common: {
+        confirm: '确认',
+        cancel: '取消',
+        ok: '确定',
+        save: '保存',
+        close: '关闭',
+        loading: '加载中...',
+        searching: '搜索中...',
+        search_failed: '搜索失败',
+        ai_not_configured: 'AI 服务未配置，请先在设置中配置',
+        error: '错误',
+        success: '成功',
+        load_error: '加载失败',
+        refreshing: '等待 Miniflux 刷新...',
+        refresh_failed: '刷新失败',
+        search: '搜索',
+        menu: '菜单',
+        unnamed: '未命名',
+        global_settings: '全局设置',
+        view: '查看'
+    },
     nav: {
         all: '全部文章',
         unread: '未读文章',
@@ -23,8 +41,6 @@ export default {
         language: '语言',
         enable: '启用',
         theme: '主题',
-        save: '保存',
-        close: '关闭',
         server_url: '服务器地址',
         username: '用户名',
         password: '密码',
@@ -42,7 +58,7 @@ export default {
         export_opml: '导出 OPML',
         importing: '导入中...',
         exporting: '导出中...',
-        import_success_refresh: '导入已提交，正在后台刷新订阅源。\n页面将在 2 秒后刷新。',
+        import_success_refresh: '导入已提交，正在后台刷新订阅源。\n页面即将刷新。',
         account_security: '账户安全',
         new_password: '新密码',
         confirm_password: '确认新密码',
@@ -76,8 +92,8 @@ export default {
         frequency: '生成频率',
         once_daily: '每天一次',
         twice_daily: '每天两次',
-        once_daily_desc: '汇总过去 24 小时内的未读文章（单次上限 500 篇，每篇提取约 1000 Tokens 核心内容）。警告：文章较多时将消耗大量 Token。',
-        twice_daily_desc: '每 12 小时运行一次，汇总期间的未读文章（单次上限 500 篇，每篇提取约 1000 Tokens 核心内容）。警告：文章较多时将消耗大量 Token。',
+        once_daily_desc: '汇总过去 24 小时内的未读文章。警告：文章较多时将消耗大量 Token。',
+        twice_daily_desc: '每 12 小时运行一次，汇总期间的未读文章。警告：文章较多时将消耗大量 Token。',
         second_run_at: '第二次运行将于',
         manage_all_schedules: '管理其他简报',
         other_schedules: '其他定时任务',
@@ -122,22 +138,6 @@ export default {
         thumbnails_on: '已开启缩略图显示',
         thumbnails_off: '已关闭缩略图显示'
     },
-    common: {
-        confirm: '确认',
-        cancel: '取消',
-        ok: '确定',
-        go_to_settings: '前往设置',
-        error: '错误',
-        success: '成功',
-        load_error: '加载失败',
-        refreshing: '等待 Miniflux 刷新...',
-        refresh_failed: '刷新失败',
-        search: '搜索',
-        menu: '菜单',
-        unnamed: '未命名',
-        close: '关闭',
-        global_settings: '全局设置'
-    },
     auth: {
         title: 'Tidyflux',
         subtitle: '请登录',
@@ -155,10 +155,7 @@ export default {
         connection_test_failed: '测试连接失败'
     },
     app: {
-        description: '简洁优雅的 RSS 阅读器',
-        loading: '加载中...',
-        searching: '搜索中...',
-        search_failed: '搜索失败'
+        description: '简洁优雅的 RSS 阅读器'
     },
     dialogs: {
         add_feed_title: '添加 RSS 订阅',
@@ -178,7 +175,6 @@ export default {
         feed_title: '标题',
         site_url: '站点链接',
         feed_url: '订阅源链接',
-
         update: '更新'
     },
     feed: {
@@ -203,14 +199,15 @@ export default {
         import_failed: '导入失败',
         read_file_failed: '读取文件失败',
         export_failed: '导出失败',
-        fetch_preferences_failed: '获取设置失败',
-        search_failed: '搜索失败'
+        fetch_preferences_failed: '获取设置失败'
     },
     ai: {
         settings_title: 'AI 设置',
         api_url: 'API 地址',
         api_key: 'API Key',
         model: '模型名称',
+        temperature: 'Temperature',
+        concurrency: '并发数',
         target_lang: '生成语言',
         translate_prompt: '自定义翻译提示词',
         translate_prompt_placeholder: '留空使用默认提示词',
@@ -223,7 +220,6 @@ export default {
         scope: "范围",
         digest_time: "生成时间",
         save_success: 'AI 配置已保存',
-        not_configured: 'AI 服务未配置，请先在设置中配置',
         api_error: 'API 调用失败',
         translating: '正在翻译...',
         summarizing: '正在总结...',
@@ -245,8 +241,9 @@ export default {
     },
     digest: {
         title: '简报',
-        generating: '正在生成简报...',
-        generated: '简报生成成功',
+        generating: '正在生成，请稍后点击简报源查看',
+        generated: '简报生成成功', // Keep compatible if needed, or remove
+        success: '成功生成简报，点击查看',
         generate: '生成简报',
         generate_for_feed: '生成此订阅的简报',
         generate_for_group: '生成此分组的简报',
@@ -257,10 +254,10 @@ export default {
         hours: '小时',
         generated_at: '生成时间',
         regenerate: '重新生成',
-        close: '关闭',
         error: '生成简报失败',
-        ai_not_configured: 'AI 服务未配置，请先在设置中配置',
         unread_toast: '有 {count} 篇未读简报，点击查看',
-        no_digests: '暂无简报'
+        no_digests: '暂无简报',
+        fetch_digests_failed: '获取简报列表失败',
+        fetch_digest_failed: '获取简报失败'
     }
 };

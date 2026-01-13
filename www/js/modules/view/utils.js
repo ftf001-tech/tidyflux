@@ -1,9 +1,17 @@
-/**
- * ViewUtils - 视图工具函数模块
- * @module view/utils
- */
-
 import { i18n } from '../i18n.js';
+
+/**
+ * UI 常量配置
+ */
+const UI_CONFIG = {
+    TOAST_DURATION_MS: 3000,
+    TOAST_Z_INDEX: 1000,
+    CONTEXT_MENU_WIDTH: 180,
+    CONTEXT_MENU_MARGIN: 10,
+    DIALOG_TRANSITION_MS: 200,
+    SCROLL_BUFFER: 10
+};
+
 
 /**
  * 转义 HTML 特殊字符，防止 XSS
@@ -20,6 +28,10 @@ export function escapeHtml(text) {
         .replace(/'/g, "&#039;");
 }
 
+const MS_PER_MINUTE = 60000;
+const MS_PER_HOUR = 3600000;
+const MS_PER_DAY = 86400000;
+
 /**
  * 格式化日期为友好的相对时间或日期字符串
  * @param {string} dateString - ISO 日期字符串
@@ -29,9 +41,9 @@ export function formatDate(dateString) {
     const date = new Date(dateString);
     const now = new Date();
     const diffMs = now - date;
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
+    const diffMins = Math.floor(diffMs / MS_PER_MINUTE);
+    const diffHours = Math.floor(diffMs / MS_PER_HOUR);
+    const diffDays = Math.floor(diffMs / MS_PER_DAY);
 
     if (diffMins < 60) return i18n.t('article.minutes_ago', { count: diffMins });
     if (diffHours < 24) return i18n.t('article.hours_ago', { count: diffHours });
@@ -53,16 +65,39 @@ export function isIOSSafari() {
     return isIOS && isWebkit && !isChrome;
 }
 
+
+// Pre-compiled regex for better performance
+const MOBILE_DEVICE_REGEX = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i;
+
 /**
  * 检测是否为移动设备
  * @returns {boolean}
  */
 export function isMobileDevice() {
     return (
-        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+        MOBILE_DEVICE_REGEX.test(navigator.userAgent) ||
         (window.innerWidth <= 1024)
     );
 }
+
+const isInvalidImageUrl = (url) => {
+    if (!url) return true;
+    const lowerUrl = url.toLowerCase();
+    // 排除 SVG (性能黑洞) 和 占位符
+    return lowerUrl.endsWith('.svg') || lowerUrl.includes('.svg?') || lowerUrl.includes('grey-placeholder.png');
+};
+
+// Pre-compiled regex patterns for better performance
+const IMG_WIDTH_REGEX = /width\s*=\s*["']?(\d+)["']?/i;
+const IMG_HEIGHT_REGEX = /height\s*=\s*["']?(\d+)["']?/i;
+
+// 检查图片尺寸是否太小
+const isImgTooSmall = (imgTag) => {
+    const widthMatch = imgTag.match(IMG_WIDTH_REGEX);
+    const heightMatch = imgTag.match(IMG_HEIGHT_REGEX);
+    return !!((widthMatch && parseInt(widthMatch[1]) < 100) ||
+        (heightMatch && parseInt(heightMatch[1]) < 100));
+};
 
 /**
  * 从 HTML 内容中提取第一张图片 URL
@@ -72,69 +107,51 @@ export function isMobileDevice() {
 export function extractFirstImage(content) {
     if (!content) return null;
 
-    // 解码 HTML 实体
-    const decoded = content
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&amp;/g, '&');
+    try {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(content, 'text/html');
 
-    // 检查是否为 SVG 或占位符图片
-    const isInvalidImage = (url) => {
-        if (!url) return true;
-        const lowerUrl = url.toLowerCase();
-        // 排除 SVG (性能黑洞) 和 占位符
-        return lowerUrl.endsWith('.svg') || lowerUrl.includes('.svg?') || lowerUrl.includes('grey-placeholder.png');
-    };
+        // Helper to check validity
+        const isValid = (src) => {
+            return src &&
+                !src.startsWith('data:') &&
+                !isInvalidImageUrl(src);
+            // Note: DOMParser parses attributes, so we don't need manual width/height regex checks as strictly,
+            // but we can check attributes if needed. For now, we trust the basic URL check.
+        };
 
-    // 检查图片尺寸是否太小
-    const isTooSmall = (imgTag) => {
-        const widthMatch = imgTag.match(/width\s*=\s*["']?(\d+)["']?/i);
-        const heightMatch = imgTag.match(/height\s*=\s*["']?(\d+)["']?/i);
-        return !!((widthMatch && parseInt(widthMatch[1]) < 100) ||
-            (heightMatch && parseInt(heightMatch[1]) < 100));
-    };
-
-    // 匹配 img 标签
-    const imgRegex = /<img\s+([^>]+)>/gi;
-    let match;
-
-    while ((match = imgRegex.exec(decoded)) !== null) {
-        const attributes = match[1];
-        let srcMatch = attributes.match(/src\s*=\s*["']([^"']+)["']/i);
-        let src = srcMatch ? srcMatch[1] : null;
-
-        // 尝试 data-src
-        if (!src) {
-            srcMatch = attributes.match(/data-src\s*=\s*["']([^"']+)["']/i);
-            src = srcMatch ? srcMatch[1] : null;
+        // 1. Selector strategy for <img>
+        const images = doc.querySelectorAll('img');
+        for (const img of images) {
+            const src = img.getAttribute('src') || img.getAttribute('data-src');
+            if (isValid(src)) {
+                // Basic size check if attributes exist (optional optimization)
+                const w = img.getAttribute('width');
+                const h = img.getAttribute('height');
+                if (w && parseInt(w) < 100) continue;
+                if (h && parseInt(h) < 100) continue;
+                return src;
+            }
         }
 
-        if (src && !src.startsWith('data:') && !isInvalidImage(src) && !isTooSmall(attributes)) {
-            return src;
+        // 2. Fallback to <source> in <picture> if needed (usually <img> covers it)
+        const sources = doc.querySelectorAll('picture source');
+        for (const source of sources) {
+            const srcset = source.getAttribute('srcset');
+            if (srcset) {
+                const firstSrc = srcset.split(',')[0].trim().split(' ')[0];
+                if (isValid(firstSrc)) return firstSrc;
+            }
         }
+
+    } catch (e) {
+        console.warn('DOMParser failed, falling back to regex', e);
     }
 
-    // 尝试 figure/picture 内的图片
-    match = decoded.match(/<(?:figure|picture)[^>]*>.*?<img[^>]+src\s*=\s*["']([^"']+)["']/is);
-    if (match && match[1] && !match[1].startsWith('data:') && !isInvalidImage(match[1])) {
-        return match[1];
-    }
-
-    // 尝试 srcset
-    match = decoded.match(/srcset\s*=\s*["']([^\s"']+)/i);
-    if (match && match[1] && !isInvalidImage(match[1])) {
-        return match[1];
-    }
-
-    // 尝试匹配纯 URL
-    const urlRegex = /(https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|gif|webp))/gi;
-    while ((match = urlRegex.exec(decoded)) !== null) {
-        const url = match[1];
-        if (url && !isInvalidImage(url)) return url;
-    }
-
-    return null;
+    // Fallback or if DOMParser fails (rare)
+    // Minimal regex fallback for extreme cases or non-browser envs (though this is frontend code)
+    const match = content.match(/<img[^>]+src=["']([^"']+)["']/i);
+    return match ? match[1] : null;
 }
 
 /**
@@ -155,7 +172,7 @@ export function getThumbnailUrl(originalUrl) {
  * @param {boolean} showLoadingIcon - 是否显示加载图标
  */
 let toastTimeout = null;
-export function showToast(message, duration = 3000, showLoadingIcon = true, onClick = null, relativeTo = null) {
+export function showToast(message, duration = UI_CONFIG.TOAST_DURATION_MS, showLoadingIcon = true, onClick = null, relativeTo = null) {
     const articlesPanel = document.getElementById('articles-panel');
     let toast = document.getElementById('app-toast');
 
@@ -186,7 +203,7 @@ export function showToast(message, duration = 3000, showLoadingIcon = true, onCl
         padding: 8px 16px;
         border-radius: var(--radius);
         box-shadow: var(--card-shadow);
-        z-index: 1000;
+        z-index: ${UI_CONFIG.TOAST_Z_INDEX};
         font-size: 0.85em;
         font-weight: 500;
         opacity: 0;
@@ -252,16 +269,16 @@ export function createContextMenu(event, innerHTML) {
     document.body.appendChild(menu);
 
     // 定位菜单
-    const menuWidth = 180;
+    const menuWidth = UI_CONFIG.CONTEXT_MENU_WIDTH;
     const menuHeight = menu.offsetHeight;
     let x = event.clientX;
     let y = event.clientY;
 
     if (x + menuWidth > window.innerWidth) {
-        x = window.innerWidth - menuWidth - 10;
+        x = window.innerWidth - menuWidth - UI_CONFIG.CONTEXT_MENU_MARGIN;
     }
     if (y + menuHeight > window.innerHeight) {
-        y = window.innerHeight - menuHeight - 10;
+        y = window.innerHeight - menuHeight - UI_CONFIG.CONTEXT_MENU_MARGIN;
     }
 
     menu.style.left = `${x}px`;
@@ -309,7 +326,7 @@ export function createDialog(className, innerHTML) {
         setTimeout(() => {
             dialog.remove();
             document.body.classList.remove('dialog-open');
-        }, 200);
+        }, UI_CONFIG.DIALOG_TRANSITION_MS);
     };
 
     // 点击背景关闭

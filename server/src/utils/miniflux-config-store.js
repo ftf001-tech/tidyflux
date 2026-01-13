@@ -3,55 +3,70 @@
  * 支持环境变量配置或手动配置
  * 密码使用 AES-256-GCM 加密存储
  */
-import fs from 'fs';
+import fs from 'fs/promises';
+import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import { encrypt, decrypt } from './encryption.js';
+import { fileURLToPath } from 'url';
 
-const DATA_DIR = process.env.DATA_DIR || path.join(process.cwd(), 'data');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const DATA_DIR = process.env.DATA_DIR || path.resolve(__dirname, '../../data');
 const CONFIG_FILE = path.join(DATA_DIR, 'miniflux-config.json');
 
+// 认证类型常量
+export const AUTH_TYPE_API_KEY = 'api_key';
+export const AUTH_TYPE_BASIC = 'basic';
+
 // Ensure data directory exists
-if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
+if (!existsSync(DATA_DIR)) {
+    mkdirSync(DATA_DIR, { recursive: true });
 }
 
-function loadConfig() {
+/**
+ * 异步加载配置
+ */
+async function loadConfig() {
     try {
-        if (fs.existsSync(CONFIG_FILE)) {
-            const data = fs.readFileSync(CONFIG_FILE, 'utf8');
-            const config = JSON.parse(data);
+        const data = await fs.readFile(CONFIG_FILE, 'utf8');
+        const config = JSON.parse(data);
 
-            // 解密密码
-            if (config.encryptedPassword) {
-                config.password = decrypt(config.encryptedPassword);
-                delete config.encryptedPassword;
-            }
-
-            // 解密 API Key
-            if (config.encryptedApiKey) {
-                config.apiKey = decrypt(config.encryptedApiKey);
-                delete config.encryptedApiKey;
-            }
-
-            return config;
+        // 解密密码
+        if (config.encryptedPassword) {
+            config.password = decrypt(config.encryptedPassword);
+            delete config.encryptedPassword;
         }
+
+        // 解密 API Key
+        if (config.encryptedApiKey) {
+            config.apiKey = decrypt(config.encryptedApiKey);
+            delete config.encryptedApiKey;
+        }
+
+        return config;
     } catch (error) {
-        console.error('Error loading miniflux config:', error);
+        if (error.code !== 'ENOENT') {
+            console.error('Error loading miniflux config:', error);
+        }
     }
     return null;
 }
 
-function saveConfig(url, username, password, apiKey = null, authType = 'basic') {
+/**
+ * 异步保存配置
+ */
+async function saveConfig(url, username, password, apiKey = null, authType = AUTH_TYPE_BASIC) {
     try {
         const config = {
             url,
             username,
             encryptedPassword: password ? encrypt(password) : null,
             encryptedApiKey: apiKey ? encrypt(apiKey) : null,
-            authType: authType || 'basic', // 'basic' or 'api_key'
+            authType: authType || AUTH_TYPE_BASIC,
             updated_at: new Date().toISOString()
         };
-        fs.writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
+        await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2), 'utf8');
         return true;
     } catch (error) {
         console.error('Error saving miniflux config:', error);
@@ -61,7 +76,7 @@ function saveConfig(url, username, password, apiKey = null, authType = 'basic') 
 
 export const MinifluxConfigStore = {
     /**
-     * 检查是否已通过环境变量配置
+     * 检查是否已通过环境变量配置 (同步函数，因为 process.env 在内存中)
      */
     isEnvConfigured() {
         const hasUrl = !!process.env.MINIFLUX_URL;
@@ -71,32 +86,30 @@ export const MinifluxConfigStore = {
     },
 
     /**
-     * 检查是否已手动配置
+     * 异步检查是否已手动配置
      */
-    isManualConfigured() {
-        const config = loadConfig();
-        if (!config || !config.url) return false;
+    async isManualConfigured() {
+        const config = await loadConfig();
+        if (!config?.url) return false;
 
-        if (config.authType === 'api_key') {
+        if (config.authType === AUTH_TYPE_API_KEY) {
             return !!config.apiKey;
         }
 
-        // Default to checking username/password if not api_key explicit or fallback
         return !!(config.username && config.password);
     },
 
     /**
-     * 获取有效的 Miniflux 配置
-     * 优先使用环境变量，其次使用手动配置
+     * 异步获取有效的 Miniflux 配置
      */
-    getConfig() {
+    async getConfig() {
         // 优先使用环境变量
         if (this.isEnvConfigured()) {
             if (process.env.MINIFLUX_API_KEY) {
                 return {
                     url: process.env.MINIFLUX_URL,
                     apiKey: process.env.MINIFLUX_API_KEY,
-                    authType: 'api_key',
+                    authType: AUTH_TYPE_API_KEY,
                     source: 'env'
                 };
             }
@@ -104,19 +117,19 @@ export const MinifluxConfigStore = {
                 url: process.env.MINIFLUX_URL,
                 username: process.env.MINIFLUX_USERNAME,
                 password: process.env.MINIFLUX_PASSWORD,
-                authType: 'basic',
+                authType: AUTH_TYPE_BASIC,
                 source: 'env'
             };
         }
 
         // 其次使用手动配置
-        const config = loadConfig();
-        if (config && config.url) {
-            if (config.authType === 'api_key' && config.apiKey) {
+        const config = await loadConfig();
+        if (config?.url) {
+            if (config.authType === AUTH_TYPE_API_KEY && config.apiKey) {
                 return {
                     url: config.url,
                     apiKey: config.apiKey,
-                    authType: 'api_key',
+                    authType: AUTH_TYPE_API_KEY,
                     source: 'manual'
                 };
             } else if (config.username && config.password) {
@@ -124,7 +137,7 @@ export const MinifluxConfigStore = {
                     url: config.url,
                     username: config.username,
                     password: config.password,
-                    authType: 'basic',
+                    authType: AUTH_TYPE_BASIC,
                     source: 'manual'
                 };
             }
@@ -134,17 +147,17 @@ export const MinifluxConfigStore = {
     },
 
     /**
-     * 获取安全的配置信息（不包含密码）
+     * 异步获取安全的配置信息
      */
-    getSafeConfig() {
-        const config = this.getConfig();
+    async getSafeConfig() {
+        const config = await this.getConfig();
         if (config) {
             return {
                 configured: true,
                 url: config.url,
                 username: config.username,
                 authType: config.authType,
-                apiKey: config.authType === 'api_key' ? '********' : null,
+                apiKey: config.authType === AUTH_TYPE_API_KEY ? '********' : null,
                 source: config.source
             };
         }
@@ -158,25 +171,24 @@ export const MinifluxConfigStore = {
     },
 
     /**
-     * 保存手动配置（密码/Key会加密存储）
+     * 异步保存手动配置
      */
-    saveManualConfig(url, username, password, apiKey, authType) {
-        return saveConfig(url, username, password, apiKey, authType);
+    async saveManualConfig(url, username, password, apiKey, authType) {
+        return await saveConfig(url, username, password, apiKey, authType);
     },
 
     /**
-     * 清除手动配置
+     * 异步清除手动配置
      */
-    clearManualConfig() {
-        if (fs.existsSync(CONFIG_FILE)) {
-            try {
-                fs.unlinkSync(CONFIG_FILE);
-                return true;
-            } catch (error) {
-                console.error('Error clearing miniflux config:', error);
-                return false;
+    async clearManualConfig() {
+        try {
+            if (existsSync(CONFIG_FILE)) {
+                await fs.unlink(CONFIG_FILE);
             }
+            return true;
+        } catch (error) {
+            console.error('Error clearing miniflux config:', error);
+            return false;
         }
-        return true;
     }
 };
