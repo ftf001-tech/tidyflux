@@ -24,7 +24,6 @@ echo "🎨 压缩 CSS..."
 cat "$ROOT_DIR/www/css/variables.css" \
     "$ROOT_DIR/www/css/base.css" \
     "$ROOT_DIR/www/css/layout.css" \
-    "$ROOT_DIR/www/css/list.css" \
     "$ROOT_DIR/www/css/article.css" \
     "$ROOT_DIR/www/css/modals.css" \
     "$ROOT_DIR/www/css/auth.css" \
@@ -42,6 +41,10 @@ esbuild "$ROOT_DIR/www/js/main.js" --bundle --minify --outfile="$DIST_DIR/www/js
 # 压缩 api.js（保持原名）
 esbuild "$ROOT_DIR/www/api.js" --minify --outfile="$DIST_DIR/www/api.js"
 
+# 复制独立库文件
+mkdir -p "$DIST_DIR/www/js/lib"
+cp "$ROOT_DIR/www/js/lib/howler.min.js" "$DIST_DIR/www/js/lib/howler.min.js"
+
 # 处理 Service Worker (复制并更新缓存列表)
 echo "⚡ 处理 Service Worker..."
 cp "$ROOT_DIR/www/sw.js" "$DIST_DIR/www/sw.js"
@@ -57,6 +60,7 @@ const prodCacheList = [
   '/style.css',
   '/api.js',
   '/js/main.js',
+  '/js/lib/howler.min.js',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
   '/manifest.json',

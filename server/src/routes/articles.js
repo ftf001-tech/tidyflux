@@ -19,6 +19,7 @@ function mapEntryToArticle(entry, thumbnail) {
         author: entry.author || '',
         published_at: entry.published_at,
         thumbnail_url: thumbnail,
+        enclosures: entry.enclosures || [],
         feed_title: entry.feed?.title || '',
         is_read: entry.status === 'read' ? 1 : 0,
         is_favorited: entry.starred ? 1 : 0

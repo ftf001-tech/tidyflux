@@ -12,7 +12,9 @@ import { Modal } from './components.js';
 import { AIService } from '../ai-service.js';
 import { i18n } from '../i18n.js';
 import { Icons } from '../icons.js';
+
 import { ArticlesView } from './articles-view.js';
+import { GlobalPodcastPlayer } from '../components/podcast-player.js';
 
 /**
  * 文章内容视图管理
@@ -200,6 +202,12 @@ export const ArticleContentView = {
         try {
             // 如果是简报
             if (isDigest) {
+                // Cleanup player if switching to digest - NO, Global Player persists
+                // if (this.podcastPlayer) {
+                //     this.podcastPlayer.destroy();
+                //     this.podcastPlayer = null;
+                // }
+
                 let digest = cachedArticle;
                 if (!digest || !digest.content) {
                     const result = await FeedManager.getDigest(articleId);
@@ -332,6 +340,10 @@ export const ArticleContentView = {
      * @param {Object} article - 文章对象
      */
     renderArticleContent(article) {
+        // No auto-cleanup for GlobalPlayer needed, it persists. 
+        // Or maybe we want to hide it if user starts reading a new article but DOESN'T play? 
+        // Usually global players persist until explicit close or new play.
+
         // document.title = article.title || 'Tidyflux';
 
         const locale = AppState.user.language || 'zh-CN';
@@ -339,6 +351,12 @@ export const ArticleContentView = {
             ? new Date(article.published_at).toLocaleString(locale)
             : '';
         const content = article.content || article.summary || '<p>内容为空</p>';
+
+        // Detect audio enclosure
+        let audioEnclosure = null;
+        if (article.enclosures && article.enclosures.length > 0) {
+            audioEnclosure = article.enclosures.find(e => e.mime_type && e.mime_type.startsWith('audio/'));
+        }
 
         // 构建 feed icon 或 feed 名称
         let feedInfo = '';
@@ -353,6 +371,13 @@ export const ArticleContentView = {
         const metaParts = [];
         if (feedInfo) metaParts.push(feedInfo);
         if (date) metaParts.push(`<span>${date}</span>`);
+        // 添加播客播放按钮到 meta 行
+        if (audioEnclosure) {
+            metaParts.push(`<button class="podcast-play-wrapper" id="podcast-play-btn" data-url="${audioEnclosure.url}" data-title="${article.title || ''}" data-cover="${article.thumbnail_url || ''}">
+                <span class="podcast-play-icon">${Icons.play_circle}</span>
+                <span class="podcast-play-text">播放播客</span>
+            </button>`);
+        }
         const metaHTML = metaParts.join('<span style="margin: 0 8px; opacity: 0.5;">·</span>');
 
         // 可点击的标题
@@ -403,10 +428,11 @@ export const ArticleContentView = {
                     display: flex; 
                     align-items: center; 
                     justify-content: flex-start;
+                    flex-wrap: wrap;
+                    gap: 4px;
                 ">
                     ${metaHTML}
                 </div>
-
             </header>
             <div id="article-ai-summary" class="article-ai-summary" style="display: none; margin: 16px 0; padding: 16px; background: var(--card-bg); border-radius: var(--radius); box-shadow: var(--card-shadow); border: none;">
                 <div class="ai-summary-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--border-color);">
@@ -422,6 +448,18 @@ export const ArticleContentView = {
             </div>
 
         `;
+
+        // Bind podcast play button click event
+        const podcastPlayBtn = document.getElementById('podcast-play-btn');
+        if (podcastPlayBtn) {
+            podcastPlayBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const url = podcastPlayBtn.dataset.url;
+                const title = podcastPlayBtn.dataset.title;
+                const cover = podcastPlayBtn.dataset.cover;
+                GlobalPodcastPlayer.play(url, title, cover);
+            });
+        }
 
         this.enhanceCodeBlocks();
         this.bindArticleToolbarEvents(article);

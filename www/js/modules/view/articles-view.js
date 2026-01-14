@@ -86,6 +86,8 @@ export const ArticlesView = {
     _resetListState() {
         AppState.pagination = null;
         AppState.articles = [];
+        this.nextPageCache = null; // Clear cached next page from previous feed
+        this.isLoadingMore = false; // Reset loading flag
         this.stopNewArticlesPoller();
 
         if (this.virtualList) {

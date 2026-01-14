@@ -2124,3 +2124,22 @@ body.dialog-open #app-container {
         right: 20px;
     }
 }
+
+/* 播放器激活时按钮抬高 */
+/* 桌面端文章页上一篇下一篇按钮抬高 45px */
+@media (min-width: 1024px) {
+    body.player-active .article-nav-btns {
+        bottom: calc(30px + 45px);
+    }
+}
+
+/* 移动端抬高 60px */
+@media (max-width: 1023px) {
+    body.player-active .scroll-to-top-btn {
+        bottom: calc(20px + env(safe-area-inset-bottom) + 60px);
+    }
+
+    body.player-active .article-nav-btns {
+        bottom: calc(20px + env(safe-area-inset-bottom) + 60px);
+    }
+}

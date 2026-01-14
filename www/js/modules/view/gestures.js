@@ -159,6 +159,12 @@ export const Gestures = {
                 return;
             }
 
+            // 检查是否在播放器控件内
+            if (swipeTarget.closest('.persistent-player-container') || swipeTarget.closest('#persistent-player-container')) {
+                startX = 0;
+                return;
+            }
+
             // 检查是否在可水平滚动的容器内
             if (this.isInHorizontalScrollableContainer(swipeTarget)) {
                 startX = 0;

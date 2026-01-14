@@ -384,3 +384,394 @@
         /* 减小左右间距 */
     }
 }
+
+/* ========================================
+   音频播放器样式 (From synthdaily)
+   ======================================== */
+.player-play-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent-color);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s ease, background-color 0.2s ease;
+    flex-shrink: 0;
+}
+
+.player-play-btn:hover {
+    transform: scale(1.08);
+    background: color-mix(in srgb, var(--accent-color), #fff 20%);
+}
+
+.player-play-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+.player-progress-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+}
+
+.player-progress-bar {
+    flex: 1;
+    height: 4px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border-color);
+    border-radius: 2px;
+    cursor: pointer;
+    outline: none;
+}
+
+.player-progress-bar::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-color) 0%, var(--accent-color) 7px, transparent 7px, transparent 100%);
+    cursor: pointer;
+    border: none;
+    box-shadow: none;
+}
+
+.player-progress-bar::-moz-range-thumb {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--accent-color) 0%, var(--accent-color) 7px, transparent 7px, transparent 100%);
+    cursor: pointer;
+    border: none;
+    box-shadow: none;
+}
+
+.player-progress-bar::-webkit-slider-runnable-track,
+.player-progress-bar::-webkit-slider-thumb {
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+.player-time {
+    font-size: 12px;
+    color: var(--meta-color);
+    font-variant-numeric: tabular-nums;
+    min-width: 36px;
+    text-align: center;
+}
+
+/* ========================================
+   持续播放器容器
+   ======================================== */
+.persistent-player-container {
+    position: fixed;
+    bottom: calc(4px + env(safe-area-inset-bottom, 0px));
+    left: 12px;
+    right: 12px;
+    background: rgba(var(--card-bg-rgb, 255, 255, 255), 0.85);
+    /* Fallback if rgb var exists */
+    background: color-mix(in srgb, var(--card-bg), transparent 15%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: var(--radius);
+    /* Rounded corners matching buttons */
+    z-index: 1000;
+    transition: transform 0.3s ease;
+    padding: 8px 12px;
+    /* padding-bottom: 8px; */
+    /* Reset padding-bottom */
+    box-shadow: var(--card-shadow);
+    border: none;
+    touch-action: none;
+    /* Prevent browser swipe gestures */
+}
+
+.persistent-player-container.hidden {
+    transform: translateY(100%);
+    pointer-events: none;
+}
+
+.player-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    max-width: 680px;
+    margin: 0 auto;
+    position: relative;
+}
+
+.track-info {
+    flex: 0 1 auto;
+    max-width: 200px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 0.9em;
+    color: var(--meta-color);
+}
+
+.player-controls-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.player-nav-btn {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    color: var(--text-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.player-nav-btn:hover {
+    color: var(--accent-color);
+    background-color: var(--hover-bg);
+}
+
+.player-nav-btn svg {
+    width: 22px;
+    height: 22px;
+}
+
+.player-close-btn {
+    background: none;
+    border: none;
+    padding: 8px;
+    cursor: pointer;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--meta-color);
+    opacity: 0.7;
+    transition: color 0.2s ease, opacity 0.2s ease, background-color 0.2s ease;
+    margin-left: -2px;
+    flex-shrink: 0;
+}
+
+.player-close-btn:hover {
+    color: var(--accent-color);
+    opacity: 1;
+    background-color: var(--hover-bg);
+}
+
+.player-close-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* ========================================
+   播客播放按钮样式
+   ======================================== */
+.podcast-play-wrapper {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    padding: 4px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    vertical-align: middle;
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+    border: none;
+    box-shadow: var(--card-shadow);
+}
+
+.podcast-play-wrapper:hover {
+    background: var(--hover-bg);
+    box-shadow: var(--card-shadow-hover);
+}
+
+.podcast-play-icon {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-color);
+}
+
+.podcast-play-icon svg {
+    width: 18px;
+    height: 18px;
+    margin: 0;
+}
+
+.podcast-play-text {
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--accent-color);
+}
+
+/* ========================================
+   响应式设计 - 桌面端
+   ======================================== */
+@media (min-width: 1024px) {
+    .player-play-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    .player-play-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .persistent-player-container {
+        position: absolute;
+        left: 50%;
+        right: auto;
+        bottom: 4px;
+        width: calc(100% - 24px);
+        max-width: 680px;
+        transform: translateX(-50%);
+        border-radius: var(--radius);
+    }
+
+    .persistent-player-container.hidden {
+        transform: translateX(-50%) translateY(150%);
+    }
+}
+
+/* ========================================
+   响应式设计 - 移动端
+   ======================================== */
+@media (max-width: 1024px) {
+
+    .persistent-player-container {
+        padding-top: 8px;
+        padding-left: 5px;
+        padding-right: 5px;
+    }
+
+    .player-content {
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 4px 6px;
+        padding: 0 10px;
+    }
+
+    .player-progress-wrapper {
+        order: 1;
+        flex-basis: 100%;
+        max-width: none;
+        padding: 0 10px;
+        margin-bottom: 2px;
+    }
+
+    .player-controls-wrapper {
+        order: 2;
+        display: flex;
+        justify-content: flex-start;
+        align-items: center;
+        gap: 2px;
+        flex-shrink: 0;
+    }
+
+    .player-nav-btn {
+        padding: 4px;
+    }
+
+    .player-nav-btn svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    .track-info {
+        order: 3;
+        flex: 1 1 0;
+        min-width: 0;
+        text-align: left;
+        font-size: 0.8em;
+        padding-left: 4px;
+        padding-right: 4px;
+    }
+
+    .player-play-btn {
+        width: auto;
+        height: auto;
+        background: none;
+        border: none;
+        padding: 4px;
+        border-radius: 50%;
+    }
+
+    .player-play-btn svg {
+        width: 18px;
+        height: 18px;
+        color: var(--text-color);
+    }
+
+    .player-play-btn:hover {
+        background: var(--hover-bg);
+        transform: none;
+    }
+
+    .player-close-btn {
+        order: 4;
+        position: static;
+        transform: none;
+        width: 28px;
+        height: 28px;
+        padding: 4px;
+        background-color: transparent;
+        border: none;
+        opacity: 1;
+        flex-shrink: 0;
+        border-radius: 50%;
+    }
+
+    .player-close-btn svg {
+        width: 18px;
+        height: 18px;
+        color: var(--meta-color);
+        opacity: 0.7;
+    }
+
+    .player-close-btn:hover {
+        background-color: var(--hover-bg);
+        transform: none;
+    }
+
+    .player-close-btn:hover svg {
+        opacity: 1;
+        color: var(--accent-color);
+    }
+
+    .persistent-player-container.hidden .player-close-btn {
+        display: none;
+    }
+}
+
+/* 播放器激活时的页面偏移 */
+/* 桌面端只需要抬高 content-panel 和 article-content */
+body.player-active #content-panel,
+body.player-active .article-content {
+    padding-bottom: 40px;
+}
+
+/* 移动端还需要抬高 feeds-panel 和 articles-panel */
+@media (max-width: 1023px) {
+
+    body.player-active #feeds-panel,
+    body.player-active #articles-panel {
+        padding-bottom: 60px;
+    }
+}
