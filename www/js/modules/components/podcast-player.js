@@ -116,16 +116,16 @@ class PodcastPlayer {
         this.container.innerHTML = `
             <div class="player-content">
                 <div class="track-info">
-                    <span class="track-title" title="${this.title}">${this.title || 'Unknown Title'}</span>
+                    <span class="track-title" title="${this.title}">${this.title || i18n.t('player.unknown_title')}</span>
                 </div>
                 <div class="player-controls-wrapper">
-                     <button id="player-prev-btn" class="player-nav-btn" aria-label="上一首">
+                     <button id="player-prev-btn" class="player-nav-btn" aria-label="${i18n.t('player.prev')}">
                         ${Icons.skip_previous}
                     </button>
-                    <button id="player-play-btn" class="player-play-btn">
+                    <button id="player-play-btn" class="player-play-btn" aria-label="${i18n.t('player.play')}">
                         ${Icons.play_arrow}
                     </button>
-                    <button id="player-next-btn" class="player-nav-btn" aria-label="下一首">
+                    <button id="player-next-btn" class="player-nav-btn" aria-label="${i18n.t('player.next')}">
                         ${Icons.skip_next}
                     </button>
                 </div>
@@ -134,7 +134,7 @@ class PodcastPlayer {
                     <input type="range" id="player-progress-bar" class="player-progress-bar" min="0" max="100" value="0" step="0.1">
                     <span id="player-duration" class="player-time">0:00</span>
                 </div>
-                <button id="player-close-btn" class="player-close-btn" aria-label="Close">
+                <button id="player-close-btn" class="player-close-btn" aria-label="${i18n.t('player.close')}">
                     ${Icons.close}
                 </button>
             </div>
@@ -265,7 +265,7 @@ class PodcastPlayer {
     formatTime(seconds) {
         const mins = Math.floor(seconds / 60);
         const secs = Math.floor(seconds % 60);
-        return `${mins}:${secs.toString().padStart(2, '0')}`;
+        return `${mins}:${secs.toString().padStart(2, '0')} `;
     }
 }
 

@@ -375,7 +375,7 @@ export const ArticleContentView = {
         if (audioEnclosure) {
             metaParts.push(`<button class="podcast-play-wrapper" id="podcast-play-btn" data-url="${audioEnclosure.url}" data-title="${article.title || ''}" data-cover="${article.thumbnail_url || ''}">
                 <span class="podcast-play-icon">${Icons.play_circle}</span>
-                <span class="podcast-play-text">播放播客</span>
+                <span class="podcast-play-text">${i18n.t('article.play_podcast')}</span>
             </button>`);
         }
         const metaHTML = metaParts.join('<span style="margin: 0 8px; opacity: 0.5;">·</span>');

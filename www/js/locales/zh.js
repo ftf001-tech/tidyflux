@@ -110,7 +110,16 @@ export default {
         no_results: '未找到相关文章',
         minutes_ago: '{count}分钟前',
         hours_ago: '{count}小时前',
-        days_ago: '{count}天前'
+        days_ago: '{count}天前',
+        play_podcast: '播放'
+    },
+    player: {
+        prev: '上一首',
+        next: '下一首',
+        play: '播放',
+        pause: '暂停',
+        close: '关闭',
+        unknown_title: '未知标题'
     },
     context: {
         pin_group: '置顶分组',

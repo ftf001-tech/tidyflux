@@ -110,7 +110,16 @@ export default {
         no_results: 'No results found',
         minutes_ago: '{count} min ago',
         hours_ago: '{count}h ago',
-        days_ago: '{count}d ago'
+        days_ago: '{count}d ago',
+        play_podcast: 'Play'
+    },
+    player: {
+        prev: 'Previous',
+        next: 'Next',
+        play: 'Play',
+        pause: 'Pause',
+        close: 'Close',
+        unknown_title: 'Unknown Title'
     },
     context: {
         pin_group: 'Pin Group',
