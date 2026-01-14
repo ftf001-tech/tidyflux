@@ -16,6 +16,10 @@ echo "📦 清理旧构建..."
 rm -rf "$DIST_DIR"
 mkdir -p "$DIST_DIR/www/js" "$DIST_DIR/www/icons" "$DIST_DIR/server/src/routes" "$DIST_DIR/server/src/middleware" "$DIST_DIR/server/src/utils" "$DIST_DIR/server/src/jobs" "$DIST_DIR/server/src/services"
 
+# Generate Build Version
+BUILD_VERSION=$(date +%s)
+echo "🔒 Build Version: $BUILD_VERSION"
+
 # ========================================
 # 前端构建
 # ========================================
@@ -45,6 +49,9 @@ esbuild "$ROOT_DIR/www/api.js" --minify --outfile="$DIST_DIR/www/api.js"
 mkdir -p "$DIST_DIR/www/js/lib"
 cp "$ROOT_DIR/www/js/lib/howler.min.js" "$DIST_DIR/www/js/lib/howler.min.js"
 
+# Copy theme-init.js
+cp "$ROOT_DIR/www/js/theme-init.js" "$DIST_DIR/www/js/theme-init.js"
+
 # 处理 Service Worker (复制并更新缓存列表)
 echo "⚡ 处理 Service Worker..."
 cp "$ROOT_DIR/www/sw.js" "$DIST_DIR/www/sw.js"
@@ -53,13 +60,15 @@ cp "$ROOT_DIR/www/sw.js" "$DIST_DIR/www/sw.js"
 cat > "$ROOT_DIR/update_sw.js" << 'JS_EOF'
 const fs = require('fs');
 const swPath = process.argv[2];
+const buildVersion = process.argv[3];
 
 const prodCacheList = [
   '/',
   '/index.html',
-  '/style.css',
-  '/api.js',
-  '/js/main.js',
+  `/style.css?v=${buildVersion}`,
+  `/api.js?v=${buildVersion}`,
+  `/js/main.js?v=${buildVersion}`,
+  `/js/theme-init.js?v=${buildVersion}`,
   '/js/lib/howler.min.js',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
@@ -78,9 +87,15 @@ try {
     process.exit(1);
   }
   
-  const newContent = content.replace(regex, `const URLS_TO_CACHE = ${JSON.stringify(prodCacheList, null, 2)};`);
+  // Replace Cache List
+  let newContent = content.replace(regex, `const URLS_TO_CACHE = ${JSON.stringify(prodCacheList, null, 2)};`);
+
+  // Replace Cache Name with Build Version
+  const cacheNameRegex = /const\s+CACHE_NAME\s*=\s*['"`].*?['"`];/;
+  newContent = newContent.replace(cacheNameRegex, `const CACHE_NAME = 'tidyflux-cache-v${buildVersion}';`);
+
   fs.writeFileSync(swPath, newContent);
-  console.log('✅ Updated sw.js cache list');
+  console.log('✅ Updated sw.js cache list and version');
 } catch (error) {
   console.error('❌ Failed to update sw.js:', error);
   process.exit(1);
@@ -88,7 +103,7 @@ try {
 JS_EOF
 
 # 执行更新脚本
-node "$ROOT_DIR/update_sw.js" "$DIST_DIR/www/sw.js"
+node "$ROOT_DIR/update_sw.js" "$DIST_DIR/www/sw.js" "$BUILD_VERSION"
 rm "$ROOT_DIR/update_sw.js"
 
 echo "📄 复制 index.html..."
