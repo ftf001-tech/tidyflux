@@ -494,7 +494,8 @@
 }
 
 .persistent-player-container.hidden {
-    transform: translateY(100%);
+    /* Ensure it moves down enough to cover the bottom offset (safe area + margin) */
+    transform: translateY(calc(100% + 60px));
     pointer-events: none;
 }
 
@@ -638,8 +639,8 @@
         left: 50%;
         right: auto;
         bottom: 4px;
-        width: calc(100% - 24px);
-        max-width: 800px;
+        width: calc(100% - 64px);
+        max-width: 760px;
         transform: translateX(-50%);
         border-radius: var(--radius);
     }

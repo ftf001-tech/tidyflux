@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tidyflux-cache-v6.8';
+const CACHE_NAME = 'tidyflux-cache-v6.9';
 
 const URLS_TO_CACHE = [
   '/',

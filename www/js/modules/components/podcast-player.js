@@ -11,8 +11,10 @@ class PodcastPlayer {
         this.isPlaying = false;
         this.isLoading = false;
         this.duration = 0;
+        this.els = null;
 
-        this.el = null;
+        // Preload Howler to minimize delay on first click
+        this.ensureHowlerLoaded().catch(() => { });
     }
 
     async play(audioUrl, title = '', coverUrl = '') {
@@ -44,7 +46,11 @@ class PodcastPlayer {
         this.isPlaying = false;
         this.duration = 0;
 
-        await this.ensureHowlerLoaded();
+        // Best effort to keep user gesture sync:
+        // If Howl is not loaded, we must await. This might break iOS autoplay on first run.
+        if (!window.Howl) {
+            await this.ensureHowlerLoaded();
+        }
 
         if (!this.container) {
             this.initContainer();
@@ -54,7 +60,6 @@ class PodcastPlayer {
         this.bindEvents();
         this.initHowl();
         this.show();
-        // isLoading will be set to false in onload callback
     }
 
     async ensureHowlerLoaded() {
@@ -103,11 +108,25 @@ class PodcastPlayer {
     }
 
     close() {
-        this.hide();
+        // Completely remove from DOM
+        if (this.container) {
+            this.container.remove();
+            this.container = null;
+        }
+        document.body.classList.remove('player-active');
+
         if (this.sound) {
             this.sound.unload();
             this.sound = null;
         }
+
+        // Reset state
+        this.isPlaying = false;
+        this.audioUrl = '';
+        this.title = '';
+        this.coverUrl = '';
+        this.duration = 0;
+        this.els = null;
     }
 
     render() {
@@ -158,10 +177,10 @@ class PodcastPlayer {
             onload: () => {
                 this.isLoading = false;
                 this.duration = this.sound.duration();
-                if (this.els.totalTime) {
+                if (this.els && this.els.totalTime) {
                     this.els.totalTime.textContent = this.formatTime(this.duration);
                 }
-                this.sound.play();
+                // Don't call play() here, it's too late for iOS gesture if we waited for load
             },
             onplay: () => {
                 this.isPlaying = true;
@@ -179,13 +198,27 @@ class PodcastPlayer {
             onend: () => {
                 this.isPlaying = false;
                 this.updatePlayPauseIcon();
-                if (this.els.seekSlider) this.els.seekSlider.value = 0;
-                if (this.els.currTime) this.els.currTime.textContent = '0:00';
+                if (this.els && this.els.seekSlider) this.els.seekSlider.value = 0;
+                if (this.els && this.els.currTime) this.els.currTime.textContent = '0:00';
+            },
+            onloaderror: (id, err) => {
+                this.isLoading = false;
+                console.error('Howl load error:', err);
+            },
+            onplayerror: (id, err) => {
+                this.isPlaying = false;
+                this.updatePlayPauseIcon();
+                console.error('Howl play error:', err);
             }
         });
+
+        // Call play immediately to satisfy iOS gesture requirement
+        this.sound.play();
     }
 
     bindEvents() {
+        if (!this.els) return;
+
         this.els.playPauseBtn.addEventListener('click', () => {
             if (this.isPlaying) {
                 this.sound.pause();
@@ -222,8 +255,6 @@ class PodcastPlayer {
         this.els.seekSlider.addEventListener('mouseup', () => { isSeeking = false; });
         this.els.seekSlider.addEventListener('touchend', () => { isSeeking = false; });
 
-        // Prev/Next buttons - for now they skip 10s/30s like before
-        // In a playlist scenario these would navigate tracks
         this.els.prevBtn.addEventListener('click', () => {
             if (this.sound) {
                 const cur = this.sound.seek();
@@ -247,8 +278,8 @@ class PodcastPlayer {
         if (!this.isSeeking()) {
             const seek = this.sound.seek() || 0;
             const duration = this.duration || 1;
-            if (this.els.currTime) this.els.currTime.textContent = this.formatTime(seek);
-            if (this.els.seekSlider) {
+            if (this.els && this.els.currTime) this.els.currTime.textContent = this.formatTime(seek);
+            if (this.els && this.els.seekSlider) {
                 this.els.seekSlider.value = (seek / duration) * 100;
             }
         }
@@ -257,7 +288,7 @@ class PodcastPlayer {
     }
 
     updatePlayPauseIcon() {
-        if (this.els.playPauseBtn) {
+        if (this.els && this.els.playPauseBtn) {
             this.els.playPauseBtn.innerHTML = this.isPlaying ? Icons.pause : Icons.play_arrow;
         }
     }
