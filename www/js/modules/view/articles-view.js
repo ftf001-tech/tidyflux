@@ -4,6 +4,10 @@ import { FeedManager } from '../feed-manager.js';
 import { VirtualList } from '../virtual-list.js';
 import { formatDate, isMobileDevice, extractFirstImage, getThumbnailUrl, showToast, escapeHtml } from './utils.js';
 import { i18n } from '../i18n.js';
+import { Icons } from '../icons.js';
+import { Modal } from './components.js';
+import { AuthManager } from '../auth-manager.js';
+import { Dialogs } from './dialogs.js';
 
 /**
  * 列表判定与功能常量配置
@@ -260,6 +264,11 @@ export const ArticlesView = {
             const html = this.generateArticlesHTML(articles);
             DOMElements.articlesList.innerHTML = html;
             this.bindArticleItemEvents();
+            
+            // 如果是简报视图，绑定删除按钮
+            if (AppState.viewingDigests) {
+                this._bindDigestDeleteButtons();
+            }
         }
     },
 
@@ -386,6 +395,9 @@ export const ArticlesView = {
                     <span class="article-date">${date}</span>
                 </div>
             </div>
+            <button class="digest-delete-btn" data-digest-id="${digest.id}" title="${i18n.t('digest.delete_digest')}" style="opacity: 0; transition: opacity 0.2s;">
+                ${Icons.delete}
+            </button>
         `;
 
         if (innerOnly) {
@@ -995,6 +1007,59 @@ export const ArticlesView = {
             }
         } catch (err) {
             console.debug('Check unread digests failed:', err);
+        }
+    },
+
+    /**
+     * 绑定简报删除按钮事件
+     */
+    _bindDigestDeleteButtons() {
+        const deleteButtons = document.querySelectorAll('.digest-delete-btn');
+        deleteButtons.forEach(btn => {
+            const digestItem = btn.closest('.digest-item');
+            
+            // 鼠标悬停显示删除按钮
+            digestItem.addEventListener('mouseenter', () => {
+                btn.style.opacity = '1';
+            });
+            
+            digestItem.addEventListener('mouseleave', () => {
+                btn.style.opacity = '0';
+            });
+            
+            // 删除按钮点击事件
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                
+                const digestId = btn.dataset.digestId;
+                if (!digestId) return;
+                
+                if (await Modal.confirm(i18n.t('digest.confirm_delete_digest'))) {
+                    try {
+                        await this._deleteDigest(digestId);
+                        showToast(i18n.t('common.deleted'), 2000, false);
+                        // 重新加载简报列表
+                        await this.viewManager.loadArticles(null, null);
+                    } catch (err) {
+                        console.error('Delete digest failed:', err);
+                        showToast(i18n.t('common.error'), 2000, true);
+                    }
+                }
+            });
+        });
+    },
+
+    /**
+     * 删除简报
+     */
+    async _deleteDigest(digestId) {
+        const response = await AuthManager.fetchWithAuth(`/api/digest/${digestId}`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to delete digest');
         }
     }
 };

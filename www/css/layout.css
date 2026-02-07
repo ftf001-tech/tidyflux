@@ -128,10 +128,11 @@
     }
 }
 
-/* 主题色按钮 - 添加订阅、菜单、订阅源按钮、搜索按钮 */
+/* 主题色按钮 - 添加订阅、菜单、订阅源按钮、搜索按钮、刷新按钮 */
 #add-feed-btn,
 #articles-menu-btn,
 #articles-search-btn,
+#articles-refresh-btn,
 #show-feeds-btn {
     color: var(--accent-color);
 }
@@ -139,6 +140,7 @@
 #add-feed-btn:hover,
 #articles-menu-btn:hover,
 #articles-search-btn:hover,
+#articles-refresh-btn:hover,
 #show-feeds-btn:hover {
     color: var(--accent-color);
     background: var(--hover-bg);

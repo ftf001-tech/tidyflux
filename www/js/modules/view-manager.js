@@ -683,6 +683,28 @@ export const ViewManager = {
             SearchView.showInlineSearchBox();
         });
 
+        document.getElementById('articles-refresh-btn')?.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            showToast(i18n.t('common.refreshing'));
+            try {
+                if (AppState.currentFeedId) {
+                    await FeedManager.refreshFeed(AppState.currentFeedId);
+                } else if (AppState.currentGroupId) {
+                    await FeedManager.refreshGroup(AppState.currentGroupId);
+                } else {
+                    await FeedManager.refreshFeeds();
+                }
+                // 刷新完成后自动重新加载文章列表和订阅源列表
+                await Promise.all([
+                    this.loadArticles(AppState.currentFeedId, AppState.currentGroupId),
+                    this.loadFeeds()
+                ]);
+                showToast(i18n.t('common.refresh_success'));
+            } catch (err) {
+                alert(err.message || i18n.t('common.refresh_failed'));
+            }
+        });
+
         document.getElementById('articles-menu-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             this.showArticlesContextMenu(e);
