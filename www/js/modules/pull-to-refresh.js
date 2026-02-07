@@ -4,11 +4,10 @@
  */
 
 const PTR_CONFIG = {
-    PULL_THRESHOLD: 60,           // 触发刷新的下拉距离（像素）
-    MAX_PULL_DISTANCE: 100,       // 最大下拉距离
-    WHEEL_THRESHOLD: 120,         // 滚轮触发刷新的累积距离
+    PULL_THRESHOLD: 80,           // 触发刷新的下拉距离（像素）
+    WHEEL_THRESHOLD: 150,         // 滚轮触发刷新的累积距离
     WHEEL_RESET_DELAY: 300,       // 滚轮停止后重置累积距离的延迟
-    ANIMATION_DURATION: 200,      // 动画持续时间（毫秒）
+    BOUNCE_DURATION: 300,         // 回弹动画持续时间（毫秒）
 };
 
 export class PullToRefresh {
@@ -27,11 +26,19 @@ export class PullToRefresh {
         this.wheelDelta = 0;
         this.wheelResetTimer = null;
         
+        // 动态计算最大下拉距离（页面高度的一半）
+        this.maxPullDistance = window.innerHeight / 2;
+        
         // 创建刷新指示器
         this.createRefreshIndicator();
         
         // 绑定事件
         this.bindEvents();
+        
+        // 监听窗口大小变化
+        window.addEventListener('resize', () => {
+            this.maxPullDistance = window.innerHeight / 2;
+        });
     }
     
     /**
@@ -92,19 +99,35 @@ export class PullToRefresh {
         this.currentY = e.touches[0].clientY;
         this.pullDistance = Math.max(0, this.currentY - this.startY);
         
-        // 限制最大下拉距离
-        this.pullDistance = Math.min(this.pullDistance, PTR_CONFIG.MAX_PULL_DISTANCE);
+        // 限制最大下拉距离（页面高度的一半）
+        this.pullDistance = Math.min(this.pullDistance, this.maxPullDistance);
         
         if (this.pullDistance > 0) {
             // 阻止默认滚动行为
             e.preventDefault();
             
             // 应用阻尼效果（越拉越难拉）
-            const damping = 0.4;
+            const damping = this.calculateDamping(this.pullDistance);
             const displayDistance = this.pullDistance * damping;
             
-            // 更新指示器位置和状态
-            this.updateIndicator(displayDistance);
+            // 更新指示器和内容位置
+            this.updatePullPosition(displayDistance);
+        }
+    }
+    
+    /**
+     * 计算阻尼系数（距离越大，阻尼越大）
+     */
+    calculateDamping(distance) {
+        // 在0-80px之间，阻尼为0.5
+        // 在80px以上，阻尼逐渐减小
+        if (distance <= PTR_CONFIG.PULL_THRESHOLD) {
+            return 0.5;
+        } else {
+            const extraDistance = distance - PTR_CONFIG.PULL_THRESHOLD;
+            const maxExtraDistance = this.maxPullDistance - PTR_CONFIG.PULL_THRESHOLD;
+            const dampingFactor = 1 - (extraDistance / maxExtraDistance) * 0.3;
+            return 0.5 * dampingFactor;
         }
     }
     
@@ -118,9 +141,11 @@ export class PullToRefresh {
         
         // 判断是否达到刷新阈值
         if (this.pullDistance >= PTR_CONFIG.PULL_THRESHOLD) {
-            this.triggerRefresh();
+            // 先回弹，再执行刷新
+            this.bounceBackAndRefresh();
         } else {
-            this.resetIndicator();
+            // 直接回弹
+            this.bounceBack();
         }
         
         this.pullDistance = 0;
@@ -142,21 +167,24 @@ export class PullToRefresh {
                 clearTimeout(this.wheelResetTimer);
             }
             
+            // 限制最大距离（页面高度的一半）
+            this.wheelDelta = Math.min(this.wheelDelta, this.maxPullDistance);
+            
+            // 显示下拉效果
+            const damping = this.calculateDamping(this.wheelDelta);
+            const displayDistance = this.wheelDelta * damping;
+            this.updatePullPosition(displayDistance);
+            
             // 如果累积距离达到阈值，触发刷新
             if (this.wheelDelta >= PTR_CONFIG.WHEEL_THRESHOLD) {
                 e.preventDefault();
-                this.triggerRefresh();
+                this.bounceBackAndRefresh();
                 this.wheelDelta = 0;
             } else {
-                // 显示刷新提示
-                const progress = this.wheelDelta / PTR_CONFIG.WHEEL_THRESHOLD;
-                const displayDistance = progress * 30; // 最多显示30px
-                this.updateIndicator(displayDistance);
-                
                 // 设置重置定时器
                 this.wheelResetTimer = setTimeout(() => {
                     this.wheelDelta = 0;
-                    this.resetIndicator();
+                    this.bounceBack();
                 }, PTR_CONFIG.WHEEL_RESET_DELAY);
             }
         } else {
@@ -166,12 +194,13 @@ export class PullToRefresh {
     }
     
     /**
-     * 更新指示器显示
+     * 更新下拉位置（指示器和内容）
      */
-    updateIndicator(distance) {
-        const progress = Math.min(distance / (PTR_CONFIG.PULL_THRESHOLD * 0.4), 1);
+    updatePullPosition(distance) {
+        const progress = Math.min(distance / (PTR_CONFIG.PULL_THRESHOLD * 0.5), 1);
         
-        // 更新位置 - 从顶部向下移动
+        // 更新指示器位置
+        this.indicator.style.transition = 'none';
         this.indicator.style.transform = `translateY(${distance - 60}px)`;
         this.indicator.style.opacity = Math.min(progress * 1.5, 1);
         
@@ -190,60 +219,92 @@ export class PullToRefresh {
         
         // 显示指示器
         this.indicator.classList.add('ptr-visible');
+        
+        // 更新内容位置
+        const articles = this.container.querySelectorAll('.article-item, .virtual-list-wrapper, .digest-item');
+        articles.forEach(article => {
+            article.style.transition = 'none';
+            article.style.transform = `translateY(${distance}px)`;
+        });
     }
     
     /**
-     * 重置指示器
+     * 回弹到原位
      */
-    resetIndicator() {
-        this.indicator.style.transition = `all ${PTR_CONFIG.ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    bounceBack() {
+        // 回弹指示器
+        this.indicator.style.transition = `all ${PTR_CONFIG.BOUNCE_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
         this.indicator.style.transform = 'translateY(-60px)';
         this.indicator.style.opacity = '0';
         
+        // 回弹内容
+        const articles = this.container.querySelectorAll('.article-item, .virtual-list-wrapper, .digest-item');
+        articles.forEach(article => {
+            article.style.transition = `transform ${PTR_CONFIG.BOUNCE_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+            article.style.transform = 'translateY(0)';
+        });
+        
+        // 清理样式
         setTimeout(() => {
-            this.indicator.classList.remove('ptr-visible', 'ptr-refreshing');
+            this.indicator.classList.remove('ptr-visible');
             this.indicator.style.transition = '';
             
-            // 重置图标
             const icon = this.indicator.querySelector('.ptr-icon');
             if (icon) {
                 icon.style.transform = 'rotate(0deg)';
             }
-        }, PTR_CONFIG.ANIMATION_DURATION);
+            
+            articles.forEach(article => {
+                article.style.transition = '';
+                article.style.transform = '';
+            });
+        }, PTR_CONFIG.BOUNCE_DURATION);
     }
     
     /**
-     * 触发刷新
+     * 回弹并执行刷新
      */
-    async triggerRefresh() {
+    async bounceBackAndRefresh() {
         if (this.isRefreshing) return;
         
         this.isRefreshing = true;
-        this.indicator.classList.add('ptr-refreshing');
         
-        // 更新指示器为加载状态
-        const text = this.indicator.querySelector('.ptr-text');
-        if (text) {
-            text.textContent = '刷新中...';
-        }
+        // 先回弹
+        this.indicator.style.transition = `all ${PTR_CONFIG.BOUNCE_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+        this.indicator.style.transform = 'translateY(-60px)';
+        this.indicator.style.opacity = '0';
         
-        // 固定指示器位置
-        this.indicator.style.transition = `all ${PTR_CONFIG.ANIMATION_DURATION}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-        this.indicator.style.transform = 'translateY(-20px)';
-        this.indicator.style.opacity = '1';
+        const articles = this.container.querySelectorAll('.article-item, .virtual-list-wrapper, .digest-item');
+        articles.forEach(article => {
+            article.style.transition = `transform ${PTR_CONFIG.BOUNCE_DURATION}ms cubic-bezier(0.34, 1.56, 0.64, 1)`;
+            article.style.transform = 'translateY(0)';
+        });
         
-        try {
-            // 执行刷新回调
-            await this.onRefresh();
-        } catch (err) {
-            console.error('Refresh error:', err);
-        } finally {
-            // 延迟重置，让用户看到刷新完成
-            setTimeout(() => {
+        // 等待回弹完成后执行刷新
+        setTimeout(async () => {
+            // 清理样式
+            this.indicator.classList.remove('ptr-visible');
+            this.indicator.style.transition = '';
+            
+            const icon = this.indicator.querySelector('.ptr-icon');
+            if (icon) {
+                icon.style.transform = 'rotate(0deg)';
+            }
+            
+            articles.forEach(article => {
+                article.style.transition = '';
+                article.style.transform = '';
+            });
+            
+            // 执行刷新
+            try {
+                await this.onRefresh();
+            } catch (err) {
+                console.error('Refresh error:', err);
+            } finally {
                 this.isRefreshing = false;
-                this.resetIndicator();
-            }, 400);
-        }
+            }
+        }, PTR_CONFIG.BOUNCE_DURATION);
     }
     
     /**
@@ -257,5 +318,12 @@ export class PullToRefresh {
         if (this.wheelResetTimer) {
             clearTimeout(this.wheelResetTimer);
         }
+        
+        // 清理所有内容的transform样式
+        const articles = this.container.querySelectorAll('.article-item, .virtual-list-wrapper, .digest-item');
+        articles.forEach(article => {
+            article.style.transition = '';
+            article.style.transform = '';
+        });
     }
 }
